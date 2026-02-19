@@ -29,8 +29,8 @@ export default function Register() {
     const ok = await register(form.name, form.email, form.password, form.organization);
     setLoading(false);
     if (ok) {
-      toast.success("Account created successfully!");
-      navigate("/dashboard");
+      toast.success("Account created successfully! Please Login.");
+      navigate("/");
     }
   };
 
