@@ -1,27 +1,121 @@
 from fastapi import FastAPI, Depends, HTTPException
-from pydantic import BaseModel #Structure syntax
-from typing import List
-from database import session,engine
+from pydantic import BaseModel
+from database import session, engine
 import db_models
 import models
 from sqlalchemy.orm import Session
 from fastapi.middleware.cors import CORSMiddleware
-from security import hash_password,verify_password, create_access_token
+from security import hash_password, verify_password, create_access_token
 
+import smtplib
+from email.mime.text import MIMEText
+import secrets
+from datetime import datetime, timedelta
+import os
+from dotenv import load_dotenv
+
+# ----------------------------
+# Load ENV
+# ----------------------------
+load_dotenv()
+
+# ----------------------------
+# FastAPI
+# ----------------------------
 app = FastAPI()
 
+# ----------------------------
+# CORS
+# ----------------------------
 app.add_middleware(
     CORSMiddleware,
-    allow_origins = ["http://localhost:8080"],
+    allow_origins=[
+        "http://localhost:8080",
+        "http://127.0.0.1:8080",
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-#Creating table in the DB
-db_models.Base.metadata.create_all(bind=engine)   #note that metadata is imp to write
+# ----------------------------
+# Create Tables
+# ----------------------------
+db_models.Base.metadata.create_all(bind=engine)
 
+# ----------------------------
+# In-memory reset token store
+# ----------------------------
+reset_store = {}
 
+# ----------------------------
+# Request Models
+# ----------------------------
+class EmailRequest(BaseModel):
+    email: str
+
+class ResetPasswordRequest(BaseModel):
+    token: str
+    new_password: str
+
+# ----------------------------
+# Email Sender (HTML)
+# ----------------------------
+def send_email(to_email, reset_link):
+    sender_email = os.getenv("EMAIL_USER")
+    sender_password = os.getenv("EMAIL_PASS")
+
+    if not sender_email or not sender_password:
+        raise Exception("Email credentials missing in .env")
+
+    html_content = f"""
+    <html>
+    <body style="font-family: Arial; background:#f4f6f8; padding:20px;">
+        <div style="max-width:500px; margin:auto; background:white; padding:25px; border-radius:8px;">
+            
+            <h2 style="color:#2563eb; text-align:center;">FinSight Password Reset</h2>
+
+            <p>Hello,</p>
+            <p>You requested to reset your password.</p>
+
+            <div style="text-align:center; margin:30px 0;">
+                <a href="{reset_link}" 
+                   style="background:#2563eb; color:white; padding:12px 20px; 
+                          text-decoration:none; border-radius:6px; font-weight:bold;">
+                   Reset Password
+                </a>
+            </div>
+
+            <p style="font-size:14px; color:#555;">
+                This link expires in <b>15 minutes</b>.
+            </p>
+
+            <p style="font-size:13px; color:#888;">
+                If you did not request this, ignore this email.
+            </p>
+
+            <hr>
+            <p style="font-size:12px; text-align:center; color:#999;">
+                © 2026 FinSight — AWS Cloud Cost Monitoring System
+            </p>
+
+        </div>
+    </body>
+    </html>
+    """
+
+    msg = MIMEText(html_content, "html")
+    msg["Subject"] = "FinSight Password Reset"
+    msg["From"] = sender_email
+    msg["To"] = to_email
+
+    with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
+        server.login(sender_email, sender_password)
+        server.sendmail(sender_email, to_email, msg.as_string())
+
+# ----------------------------
+# DB Dependency
+# ----------------------------
 def get_db():
     db = session()
     try:
@@ -29,96 +123,106 @@ def get_db():
     finally:
         db.close()
 
-#Default
+# ----------------------------
+# Routes
+# ----------------------------
 @app.get("/")
 def read_root():
-    return{"message" : "Welcome to FinSight"}
+    return {"message": "Welcome to FinSight"}
 
-#Fething all data
-@app.get("/clients")
-def get_clients(db:Session = Depends(get_db)):
-    db_clients = db.query(db_models.Client).all()
-    return db_clients
-
-# #Fetching Data by id
-# @app.get("/login/{email}&{password}")
-# def get_client(email: str, password: str, db:Session = Depends(get_db)):
-#     db_client = db.query(db_models.Client).filter(db_models.Client.email == email and db_models.Client.password == password).first()
-#     if db_client:
-#         return db_client
-#     return "Client Not Found"
-
-#Adding Data
 @app.post("/register")
-def register(clientData : models.Client, db: Session = Depends(get_db)):
+def register(clientData: models.Client, db: Session = Depends(get_db)):
+    existing = db.query(db_models.Client).filter(
+        db_models.Client.email == clientData.email
+    ).first()
 
-    existing = db.query(db_models.Client).filter(db_models.Client.email == clientData.email).first()
     if existing:
         raise HTTPException(status_code=400, detail="Email already registered")
-
-    hashed_password = hash_password(clientData.password)
 
     new_user = db_models.Client(
         name=clientData.name,
         email=clientData.email,
-        password=hashed_password,
+        password=hash_password(clientData.password),
         organization=clientData.organization
     )
 
     db.add(new_user)
     db.commit()
-    db.refresh(new_user)
 
     return {"message": "User created successfully"}
 
-from security import verify_password, create_access_token
-
 @app.post("/login")
-def login(clientData : models.ClientLogin, db: Session = Depends(get_db)):
+def login(clientData: models.ClientLogin, db: Session = Depends(get_db)):
+    user = db.query(db_models.Client).filter(
+        db_models.Client.email == clientData.email
+    ).first()
 
-    db_user = db.query(db_models.Client).filter(db_models.Client.email == clientData.email).first()
-
-    if not db_user:
+    if not user or not verify_password(clientData.password, user.password):
         raise HTTPException(status_code=400, detail="Invalid email or password")
 
-    if not verify_password(clientData.password, db_user.password):
-        raise HTTPException(status_code=400, detail="Invalid email or password")
-
-    access_token = create_access_token(
-        data={"sub": str(db_user.id)}
-    )
+    token = create_access_token({"sub": str(user.id)})
 
     return {
-        "access_token": access_token,
+        "access_token": token,
         "token_type": "bearer",
         "user": {
-            "id": db_user.id,
-            "name": db_user.name,
-            "email": db_user.email,
-            "organization": db_user.organization
+            "id": user.id,
+            "name": user.name,
+            "email": user.email,
+            "organization": user.organization
         }
     }
 
-#Updating Data
-@app.put("/update/{id}")
-def update_client(id : int, updateClient:models.Client, db:Session = Depends(get_db)):
-    db_client = db.query(db_models.Client).filter(db_models.Client.id == id).first()
-    if db_client:
-        db_client.name = updateClient.name
-        db_client.email = updateClient.email
-        db_client.password = updateClient.password
-        db_client.organization = updateClient.organization
-        db.add(db_client)
-        db.commit()
-        return updateClient
-    return "Client Not Found"
+# ----------------------------
+# Forgot Password
+# ----------------------------
+@app.post("/forgot-password")
+def forgot_password(req: EmailRequest, db: Session = Depends(get_db)):
+    user = db.query(db_models.Client).filter(
+        db_models.Client.email == req.email
+    ).first()
 
-#Deleting Data
-@app.delete("/delete/{id}")
-def delete_temp(id: int, db:Session = Depends(get_db)):
-    db_client = db.query(db_models.Client).filter(db_models.Client.id == id).first()
-    if db_client:
-        db.delete(db_client)
-        db.commit()
-        return {"Message": "Client Deleted Successfully"}
-    return{"error": "Client not found"}
+    if not user:
+        raise HTTPException(status_code=404, detail="Email not registered")
+
+    token = secrets.token_urlsafe(32)
+    expiry = datetime.utcnow() + timedelta(minutes=15)
+
+    reset_store[token] = {
+        "email": req.email,
+        "expiry": expiry
+    }
+
+    reset_link = f"http://localhost:8080/reset-password?token={token}"
+
+    send_email(req.email, reset_link)
+
+    return {"message": "Password reset link sent"}
+
+# ----------------------------
+# Reset Password
+# ----------------------------
+@app.post("/reset-password")
+def reset_password(req: ResetPasswordRequest, db: Session = Depends(get_db)):
+    data = reset_store.get(req.token)
+
+    if not data:
+        raise HTTPException(status_code=400, detail="Invalid or expired token")
+
+    if datetime.utcnow() > data["expiry"]:
+        reset_store.pop(req.token, None)
+        raise HTTPException(status_code=400, detail="Token expired")
+
+    user = db.query(db_models.Client).filter(
+        db_models.Client.email == data["email"]
+    ).first()
+
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    user.password = hash_password(req.new_password)
+    db.commit()
+
+    reset_store.pop(req.token, None)
+
+    return {"message": "Password reset successful"}
