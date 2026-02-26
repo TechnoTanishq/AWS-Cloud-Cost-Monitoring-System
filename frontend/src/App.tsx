@@ -16,6 +16,9 @@ import Budgets from "./pages/Budgets";
 import IAMIntegration from "./pages/IAMIntegration";
 import AccountSettings from "./pages/AccountSettings";
 import NotFound from "./pages/NotFound";
+import ForgotPassword from "./pages/ForgotPassword";
+import ResetPassword from "./pages/ResetPassword";
+
 
 const queryClient = new QueryClient();
 
@@ -39,7 +42,11 @@ function AppRoutes() {
       <Route path="/dashboard/budgets" element={<ProtectedRoute><Budgets /></ProtectedRoute>} />
       <Route path="/dashboard/iam" element={<ProtectedRoute><IAMIntegration /></ProtectedRoute>} />
       <Route path="/dashboard/settings" element={<ProtectedRoute><AccountSettings /></ProtectedRoute>} />
+      <Route path="/forgot-password" element={<ForgotPassword />} />
+     
+      <Route path="/reset-password" element={<ResetPassword />} />
       <Route path="*" element={<NotFound />} />
+      
     </Routes>
   );
 }

@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useCallback } from "react";
-
+import { toast } from "sonner";
 interface User {
   id: string;
   name: string;
@@ -32,34 +32,40 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const API_URL = "http://localhost:8000"
 
-const login = useCallback(async (email:string, password:string) => {
-        // setLoading(true);
-        try {
-            const res = await fetch(`${API_URL}/login`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ email, password }),
-            });
-            if (!res.ok) {
-                const err = await res.json().catch(() => ({}));
-                throw new Error(err.detail || err.message || "Login failed");
-            }
-            const payload = await res.json();
-            const accessToken = payload.access_token || payload.token || payload.accessToken;
-            const userData = payload.user || payload;
-            if (!accessToken) throw new Error("No access token returned");
-            // setToken(accessToken);
-            setUser(userData);
-            localStorage.setItem("token", accessToken);
-            localStorage.setItem("user", JSON.stringify(userData));
-            // setLoading(false);
-            return userData;
-        } catch (e) {
-            // setLoading(false);
-            throw e;
-        }
-    },[]);
+const login = useCallback(async (email: string, password: string) => {
+  try {
+    const res = await fetch(`${API_URL}/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, password }),
+    });
 
+    const data = await res.json().catch(() => ({}));
+
+    if (!res.ok) {
+      toast.error(data.detail || "Invalid email or password");   // 👈 SHOW ERROR
+      return false;
+    }
+
+    const accessToken = data.access_token;
+    const userData = data.user;
+
+    if (!accessToken) {
+      toast.error("Login failed");
+      return false;
+    }
+
+    setUser(userData);
+    localStorage.setItem("token", accessToken);
+    localStorage.setItem("finsight_user", JSON.stringify(userData));
+
+    return true;
+  } catch (error) {
+    console.error("Login error:", error);
+    toast.error("Server not reachable");
+    return false;
+  }
+}, []);
   const register = useCallback(async (name: string, email: string, password: string, organization: string) => 
   {
     try{
