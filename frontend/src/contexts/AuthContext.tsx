@@ -1,11 +1,6 @@
-<<<<<<< HEAD
-import React, { createContext, useContext, useState, useCallback } from "react";
-import { toast } from "sonner";
-=======
 import React, { createContext, useContext, useState, useCallback, useEffect } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 
->>>>>>> 801bc75 (feat: implement OAuth2 and secure password recovery system)
 interface User {
   id: string;
   name: string;
@@ -16,8 +11,8 @@ interface User {
 interface AuthContextType {
   user: User | null;
   isAuthenticated: boolean;
-  login: (email: string, password: string) => Promise<{ok:boolean, error?:string}>;
-  register: (name: string, email: string, password: string, organization: string) => Promise<{ok:boolean, error?:string}>;
+  login: (email: string, password: string) => Promise<{ ok: boolean; error?: string }>;
+  register: (name: string, email: string, password: string, organization: string) => Promise<{ ok: boolean; error?: string }>;
   logout: () => void;
   updateProfile: (data: Partial<User>) => void;
 }
@@ -35,11 +30,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const stored = localStorage.getItem("finsight_user");
     return stored ? JSON.parse(stored) : null;
   });
-  
+
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
 
-  // Handle OAuth callback with verification
+  // Handle OAuth callback
   useEffect(() => {
     const token = searchParams.get("token");
     const userEmail = searchParams.get("user");
@@ -54,34 +49,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     if (token && userEmail && verified === "true") {
       console.log("[OAuth Callback] Received verified token from Google OAuth");
-      console.log(`[OAuth Callback] User email: ${userEmail}`);
-      console.log(`[OAuth Callback] Token verified: ${verified}`);
-      
+
       try {
-        // Validate token format (basic check)
-        const parts = token.split('.');
-        if (parts.length !== 3) {
-          throw new Error("Invalid JWT token format");
-        }
-        
-        console.log("[OAuth Callback] ✓ Token format verified (JWT with 3 parts)");
-        
+        const parts = token.split(".");
+        if (parts.length !== 3) throw new Error("Invalid JWT token format");
+
+        console.log("[OAuth Callback] ✓ Token format verified");
         localStorage.setItem("token", token);
-        
-        // Create user object from the callback (will be updated when fetching user data)
-        const userData = {
+
+        const userData: User = {
           id: "google-user",
           name: userEmail.split("@")[0],
           email: userEmail,
-          organization: "Google"
+          organization: "Google",
         };
-        
-        console.log("[OAuth Callback] ✓ Storing user data and token");
+
         setUser(userData);
         localStorage.setItem("finsight_user", JSON.stringify(userData));
-        
         console.log("[OAuth Callback] ✓ Authentication successful! Navigating to dashboard...");
-        // Navigate to dashboard and clean up URL
         navigate("/dashboard", { replace: true });
       } catch (error) {
         console.error("[OAuth Callback] ✗ Error processing OAuth token:", error);
@@ -95,102 +80,63 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, [searchParams, navigate]);
 
-  // always point to authentication namespace
-  const API_URL = "http://localhost:8000/auth"
+  const API_URL = "http://localhost:8000/auth";
 
-<<<<<<< HEAD
-const login = useCallback(async (email: string, password: string) => {
-  try {
-    const res = await fetch(`${API_URL}/login`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, password }),
-    });
-=======
-const login = useCallback(async (email:string, password:string) => {
-        try {
-            const res = await fetch(`${API_URL}/login`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ email, password }),
-            });
-            if (!res.ok) {
-                const err = await res.json().catch(() => ({}));
-                console.error("Login failed:", err);
-                return { ok: false, error: err.detail || err.message || "Login failed" };
-            }
-            const payload = await res.json();
-            const accessToken = payload.access_token || payload.token || payload.accessToken;
-            const userData = payload.user || payload;
-            if (!accessToken) {
-                console.error("No access token returned");
-                return { ok: false, error: "No access token returned" };
-            }
-            // Ensure id is a string
-            const userWithStringId = {
-                ...userData,
-                id: String(userData.id)
-            };
-            setUser(userWithStringId);
-            localStorage.setItem("token", accessToken);
-            localStorage.setItem("finsight_user", JSON.stringify(userWithStringId));
-            return { ok: true };
-        } catch (e) {
-            console.error("Login error:", e);
-            return { ok: false, error: String(e) };
-        }
-    },[]);
->>>>>>> 801bc75 (feat: implement OAuth2 and secure password recovery system)
-
-    const data = await res.json().catch(() => ({}));
-
-    if (!res.ok) {
-      toast.error(data.detail || "Invalid email or password");   // 👈 SHOW ERROR
-      return false;
-    }
-
-    const accessToken = data.access_token;
-    const userData = data.user;
-
-    if (!accessToken) {
-      toast.error("Login failed");
-      return false;
-    }
-
-    setUser(userData);
-    localStorage.setItem("token", accessToken);
-    localStorage.setItem("finsight_user", JSON.stringify(userData));
-
-    return true;
-  } catch (error) {
-    console.error("Login error:", error);
-    toast.error("Server not reachable");
-    return false;
-  }
-}, []);
-  const register = useCallback(async (name: string, email: string, password: string, organization: string) => 
-  {
-    try{
-      const response = await fetch(`${API_URL}/register`,{
+  const login = useCallback(async (email: string, password: string) => {
+    try {
+      const res = await fetch(`${API_URL}/login`, {
         method: "POST",
-        headers:{
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          name,email,password,organization
-        }),
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password }),
       });
 
-      if(!response.ok)
-      {
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        console.error("Login failed:", err);
+        return { ok: false, error: err.detail || err.message || "Login failed" };
+      }
+
+      const payload = await res.json();
+      const accessToken = payload.access_token || payload.token || payload.accessToken;
+      const userData = payload.user || payload;
+
+      if (!accessToken) {
+        console.error("No access token returned");
+        return { ok: false, error: "No access token returned" };
+      }
+
+      const userWithStringId: User = { ...userData, id: String(userData.id) };
+      setUser(userWithStringId);
+      localStorage.setItem("token", accessToken);
+      localStorage.setItem("finsight_user", JSON.stringify(userWithStringId));
+      return { ok: true };
+    } catch (e) {
+      console.error("Login error:", e);
+      return { ok: false, error: String(e) };
+    }
+  }, []);
+
+  const register = useCallback(async (
+    name: string,
+    email: string,
+    password: string,
+    organization: string
+  ) => {
+    try {
+      const response = await fetch(`${API_URL}/register`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, email, password, organization }),
+      });
+
+      if (!response.ok) {
         const err = await response.json().catch(() => ({}));
         console.error("Registration failed:", err);
         return { ok: false, error: err.detail || err.message || "Registration failed" };
       }
+
       return { ok: true };
-    }
-    catch(error)
-    {
+    } catch (error) {
       console.error("Register error:", error);
       return { ok: false, error: String(error) };
     }
@@ -217,4 +163,3 @@ const login = useCallback(async (email:string, password:string) => {
     </AuthContext.Provider>
   );
 };
-

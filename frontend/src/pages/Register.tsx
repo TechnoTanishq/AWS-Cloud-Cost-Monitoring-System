@@ -2,12 +2,11 @@ import { PublicLayout } from "@/components/PublicLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useState, useEffect } from "react";
+import { Link, useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 import { motion } from "framer-motion";
-<<<<<<< HEAD
 import { BarChart3, Eye, EyeOff } from "lucide-react";
 
 export default function Register() {
@@ -19,34 +18,21 @@ export default function Register() {
   });
 
   const [showPass, setShowPass] = useState(false);
-=======
-import { BarChart3 } from "lucide-react";
-import { useLocation } from "react-router-dom";
-import { useEffect } from "react";
-
-
-export default function Register() {
-
-  const [form, setForm] = useState({ name: "", email: "", password: "", organization: "" });
->>>>>>> 801bc75 (feat: implement OAuth2 and secure password recovery system)
   const [loading, setLoading] = useState(false);
 
   const { register } = useAuth();
   const navigate = useNavigate();
-  const location = useLocation();   // 👈 ADD THIS
+  const location = useLocation();
 
-  useEffect(() => {                 // 👈 ADD THIS BLOCK
+  useEffect(() => {
     const params = new URLSearchParams(location.search);
     const error = params.get("error");
 
     if (error === "registration_required") {
       toast.error("You're not registered yet. Please create an account.");
-
-      // remove query params so toast doesn't repeat
       window.history.replaceState({}, document.title, "/register");
     }
   }, [location]);
-
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -67,44 +53,20 @@ export default function Register() {
     }
 
     setLoading(true);
-<<<<<<< HEAD
 
-    try {
-      const ok = await register(
-        form.name,
-        form.email,
-        form.password,
-        form.organization
-      );
-
-      if (ok) {
-        toast.success("Account created successfully! Please Login.");
-        navigate("/login");
-      } else {
-        toast.error("Registration failed.");
-      }
-    } catch (err: any) {
-      toast.error(err?.message || "Registration error");
-=======
     const result = await register(form.name, form.email, form.password, form.organization);
     setLoading(false);
+
     if (result.ok) {
       toast.success("Account created successfully! Redirecting to login...");
-      // Add a small delay to let user see the success message
-      setTimeout(() => {
-        navigate("/login", { state: { email: form.email } });
-      }, 1500);
+      setTimeout(() => navigate("/login", { state: { email: form.email } }), 1500);
     } else {
       const errMsg = result.error || "Registration failed. Email may already exist.";
       toast.error(errMsg);
-      // If email already registered, redirect to login with prefilled email
-      if (errMsg.toLowerCase().includes("email already" ) || errMsg.toLowerCase().includes("already registered")) {
+      if (errMsg.toLowerCase().includes("email already") || errMsg.toLowerCase().includes("already registered")) {
         setTimeout(() => navigate("/login", { state: { email: form.email } }), 800);
       }
->>>>>>> 801bc75 (feat: implement OAuth2 and secure password recovery system)
     }
-
-    setLoading(false);
   };
 
   return (
@@ -132,9 +94,7 @@ export default function Register() {
                 id="name"
                 placeholder="John Doe"
                 value={form.name}
-                onChange={(e) =>
-                  setForm({ ...form, name: e.target.value })
-                }
+                onChange={(e) => setForm({ ...form, name: e.target.value })}
                 maxLength={100}
               />
             </div>
@@ -147,9 +107,7 @@ export default function Register() {
                 type="email"
                 placeholder="you@company.com"
                 value={form.email}
-                onChange={(e) =>
-                  setForm({ ...form, email: e.target.value })
-                }
+                onChange={(e) => setForm({ ...form, email: e.target.value })}
                 maxLength={255}
               />
             </div>
@@ -157,19 +115,15 @@ export default function Register() {
             {/* Password */}
             <div className="space-y-2">
               <Label htmlFor="password">Password</Label>
-
               <div className="relative">
                 <Input
                   id="password"
                   type={showPass ? "text" : "password"}
                   placeholder="Min. 8 characters"
                   value={form.password}
-                  onChange={(e) =>
-                    setForm({ ...form, password: e.target.value })
-                  }
+                  onChange={(e) => setForm({ ...form, password: e.target.value })}
                   maxLength={128}
                 />
-
                 <button
                   type="button"
                   onClick={() => setShowPass(!showPass)}
@@ -187,9 +141,7 @@ export default function Register() {
                 id="org"
                 placeholder="Acme Corp"
                 value={form.organization}
-                onChange={(e) =>
-                  setForm({ ...form, organization: e.target.value })
-                }
+                onChange={(e) => setForm({ ...form, organization: e.target.value })}
                 maxLength={100}
               />
             </div>
@@ -201,10 +153,7 @@ export default function Register() {
 
           <p className="text-center text-sm text-muted-foreground mt-4">
             Already have an account?{" "}
-            <Link
-              to="/login"
-              className="text-primary hover:underline font-medium"
-            >
+            <Link to="/login" className="text-primary hover:underline font-medium">
               Sign in
             </Link>
           </p>

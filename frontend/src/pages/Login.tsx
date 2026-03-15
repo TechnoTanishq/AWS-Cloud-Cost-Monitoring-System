@@ -6,13 +6,11 @@ import { Link, useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 import { motion } from "framer-motion";
-import { BarChart3, Eye, EyeOff } from "lucide-react";
-
+import { BarChart3 } from "lucide-react";
 
 export default function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [showPass, setShowPass] = useState(false);
   const [loading, setLoading] = useState(false);
 
   const { login } = useAuth();
@@ -25,12 +23,12 @@ export default function Login() {
     console.log("[Login] location.search", location.search);
     const error = params.get("error");
     const emailFromCallback = params.get("email");
-    
+
     if (error === "user_not_registered" && emailFromCallback) {
       toast.error(`Email "${emailFromCallback}" is not registered. Please sign up first.`);
       setEmail(emailFromCallback);
     }
-    
+
     const state = location.state as { email?: string } | null;
     if (state?.email && !emailFromCallback) {
       setEmail(state.email);
@@ -46,20 +44,7 @@ export default function Login() {
     }
 
     setLoading(true);
-<<<<<<< HEAD
 
-    try {
-      const ok = await login(email, password);
-
-      if (ok) {
-        toast.success("Welcome back!");
-        navigate("/dashboard");
-      } else {
-        toast.error("Invalid email or password");
-      }
-    } catch (err: any) {
-      toast.error(err?.message || "Login failed");
-=======
     try {
       const result = await login(email, password);
       if (result.ok) {
@@ -68,9 +53,7 @@ export default function Login() {
       } else {
         if (result.error?.includes("not registered")) {
           toast.error("You're not registered yet. Please create an account.");
-          setTimeout(() => {
-            navigate("/register");
-          }, 1500);
+          setTimeout(() => navigate("/register"), 1500);
         } else {
           toast.error(result.error || "Login failed");
         }
@@ -89,90 +72,10 @@ export default function Login() {
     } catch (error) {
       console.error("Google login error:", error);
       toast.error("Google login failed");
->>>>>>> 801bc75 (feat: implement OAuth2 and secure password recovery system)
     }
-
-    setLoading(false);
   };
 
   return (
-<<<<<<< HEAD
-    <PublicLayout>
-      <section className="section-padding flex items-center justify-center min-h-[70vh]">
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="w-full max-w-md"
-        >
-          <div className="text-center mb-8">
-            <BarChart3 className="h-10 w-10 text-primary mx-auto mb-3" />
-            <h1 className="text-2xl font-bold">Sign in to FinSight</h1>
-            <p className="text-sm text-muted-foreground mt-1">
-              Enter your credentials to access your dashboard
-            </p>
-          </div>
-
-          <form onSubmit={handleSubmit} className="card-elevated-lg p-6 space-y-5">
-
-            {/* Email */}
-            <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
-              <Input
-                id="email"
-                type="email"
-                placeholder="you@company.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                maxLength={255}
-              />
-            </div>
-
-            {/* Password */}
-            <div className="space-y-2">
-              <Label htmlFor="password">Password</Label>
-
-              <div className="relative">
-                <Input
-                  id="password"
-                  type={showPass ? "text" : "password"}
-                  placeholder="••••••••"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  maxLength={128}
-                />
-
-                <button
-                  type="button"
-                  onClick={() => setShowPass(!showPass)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground"
-                >
-                  {showPass ? <EyeOff size={18} /> : <Eye size={18} />}
-                </button>
-              </div>
-            </div>
-
-            {/* Forgot */}
-            <div className="text-right text-sm">
-              <Link to="/forgot-password" className="text-primary hover:underline">
-                Forgot Password?
-              </Link>
-            </div>
-
-            <Button type="submit" className="w-full" disabled={loading}>
-              {loading ? "Signing in..." : "Sign In"}
-            </Button>
-          </form>
-
-          <p className="text-center text-sm text-muted-foreground mt-4">
-            Don’t have an account?{" "}
-            <Link to="/register" className="text-primary hover:underline font-medium">
-              Register
-            </Link>
-          </p>
-        </motion.div>
-      </section>
-    </PublicLayout>
-=======
     <div className="min-h-screen w-full flex flex-col items-center justify-center bg-white px-4 py-12">
       {/* Header */}
       <motion.div
@@ -198,7 +101,7 @@ export default function Login() {
         transition={{ duration: 0.5, delay: 0.1 }}
         className="w-full max-w-sm"
       >
-        {/* Google Sign In Button - TOP PRIORITY */}
+        {/* Google Sign In Button */}
         <motion.div
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
@@ -277,12 +180,6 @@ export default function Login() {
               disabled={loading}
               className="h-10 rounded-md border-slate-300 focus:border-blue-500 focus:ring-blue-500 transition-all"
             />
-            <Link 
-              to="/forgot-password" 
-              className="text-sm text-blue-600 hover:underline"
-            >
-              Forgot Password?
-            </Link>
           </div>
 
           {/* Sign In Button */}
@@ -316,6 +213,5 @@ export default function Login() {
         </Link>
       </motion.p>
     </div>
->>>>>>> 801bc75 (feat: implement OAuth2 and secure password recovery system)
   );
 }

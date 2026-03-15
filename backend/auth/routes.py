@@ -72,6 +72,59 @@ GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET")
 FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:8080")
 BACKEND_URL = os.getenv("BACKEND_URL", "http://localhost:8000")
 
+EMAIL_USER = os.getenv("EMAIL_USER")
+EMAIL_PASS = os.getenv("EMAIL_PASS")
+
+
+# ============================================================================
+# EMAIL UTILITY
+# ============================================================================
+
+def send_reset_email(to_email: str, reset_link: str):
+    if not EMAIL_USER or not EMAIL_PASS:
+        print(f"[DEV] Email credentials missing. Reset link: {reset_link}")
+        return
+
+    import smtplib
+    from email.mime.text import MIMEText
+    from email.mime.multipart import MIMEMultipart
+
+    html_content = f"""
+    <html>
+    <body style="font-family: Arial; background:#f4f6f8; padding:20px;">
+        <div style="max-width:500px; margin:auto; background:white; padding:25px; border-radius:8px;">
+            <h2 style="color:#2563eb; text-align:center;">FinSight Password Reset</h2>
+            <p>Hello,</p>
+            <p>We received a request to reset your FinSight password.</p>
+            <div style="text-align:center; margin:30px 0;">
+                <a href="{reset_link}"
+                   style="background:#2563eb; color:white; padding:14px 28px;
+                          text-decoration:none; border-radius:6px; font-weight:bold;">
+                   Reset My Password
+                </a>
+            </div>
+            <p style="font-size:14px; color:#555;">This link expires in <b>15 minutes</b>.</p>
+            <p style="font-size:13px; color:#888;">If you did not request this, ignore this email.</p>
+            <hr>
+            <p style="font-size:12px; text-align:center; color:#999;">
+                © 2026 FinSight — AWS Cloud Cost Monitoring System
+            </p>
+        </div>
+    </body>
+    </html>
+    """
+
+    msg = MIMEMultipart("alternative")
+    msg["Subject"] = "FinSight — Password Reset Request"
+    msg["From"] = f"FinSight <{EMAIL_USER}>"
+    msg["To"] = to_email
+    msg.attach(MIMEText(html_content, "html"))
+
+    with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
+        server.login(EMAIL_USER, EMAIL_PASS)
+        server.sendmail(EMAIL_USER, to_email, msg.as_string())
+
+    print(f"[EMAIL] Reset email sent to {to_email}")
 
 # ============================================================================
 # 1. MANUAL REGISTRATION
@@ -433,12 +486,9 @@ def forgot_password(payload: ForgotPasswordRequest, db: Session = Depends(get_db
     # Build reset link
     reset_link = f"{FRONTEND_URL}/reset-password?token={reset_token}"
 
-    print(f"[DEV] Reset link for {db_user.email}: {reset_link}")
+    send_reset_email(db_user.email, reset_link)
 
-    return {
-        "message": "Password reset link generated.",
-        "reset_link": reset_link  # for development only
-    }
+    return {"message": "If an account with that email exists, a password reset link was sent."}
 
     # TODO: In production, send email with reset link containing the token
     # For now, return token for testing
