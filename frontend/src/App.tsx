@@ -20,11 +20,19 @@ import ForgotPassword from "./pages/ForgotPassword";
 import ResetPassword from "./pages/ResetPassword";
 
 
+import ForgotPassword from "./pages/ForgotPassword";
+import ResetPassword from "./pages/ResetPassword";
+
 const queryClient = new QueryClient();
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated } = useAuth();
-  if (!isAuthenticated) return <Navigate to="/login" replace />;
+  // Allow the route to render if a token is present in the URL (OAuth callback)
+  const params = new URLSearchParams(window.location.search);
+  const tokenInUrl = params.get("token");
+  // also allow if a valid token is stored locally (in case context is not yet hydrated)
+  const storedToken = localStorage.getItem("token");
+  if (!isAuthenticated && !tokenInUrl && !storedToken) return <Navigate to="/login" replace />;
   return <>{children}</>;
 }
 
@@ -35,6 +43,8 @@ function AppRoutes() {
       <Route path="/about" element={<About />} />
       <Route path="/feedback" element={<Feedback />} />
       <Route path="/login" element={<Login />} />
+      {/* OAuth callback route - handled by AuthContext effect inside Login */}
+      <Route path="/auth/google/callback" element={<Login />} />
       <Route path="/register" element={<Register />} />
       <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
       <Route path="/dashboard/costs" element={<ProtectedRoute><CostBreakdown /></ProtectedRoute>} />
@@ -46,7 +56,12 @@ function AppRoutes() {
      
       <Route path="/reset-password" element={<ResetPassword />} />
       <Route path="*" element={<NotFound />} />
+<<<<<<< HEAD
       
+=======
+      <Route path="/forgot-password" element={<ForgotPassword />} />
+      <Route path="/reset-password" element={<ResetPassword />} />
+>>>>>>> 801bc75 (feat: implement OAuth2 and secure password recovery system)
     </Routes>
   );
 }

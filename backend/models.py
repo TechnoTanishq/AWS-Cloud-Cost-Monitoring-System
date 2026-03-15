@@ -12,3 +12,12 @@ class ClientLogin(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class ForgotPassword(BaseModel):
+    email: EmailStr
+
+
+class ResetPassword(BaseModel):
+    token: str
+    new_password: str

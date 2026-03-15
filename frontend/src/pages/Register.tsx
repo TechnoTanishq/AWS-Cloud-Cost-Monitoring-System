@@ -7,6 +7,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 import { motion } from "framer-motion";
+<<<<<<< HEAD
 import { BarChart3, Eye, EyeOff } from "lucide-react";
 
 export default function Register() {
@@ -18,10 +19,34 @@ export default function Register() {
   });
 
   const [showPass, setShowPass] = useState(false);
+=======
+import { BarChart3 } from "lucide-react";
+import { useLocation } from "react-router-dom";
+import { useEffect } from "react";
+
+
+export default function Register() {
+
+  const [form, setForm] = useState({ name: "", email: "", password: "", organization: "" });
+>>>>>>> 801bc75 (feat: implement OAuth2 and secure password recovery system)
   const [loading, setLoading] = useState(false);
 
   const { register } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();   // 👈 ADD THIS
+
+  useEffect(() => {                 // 👈 ADD THIS BLOCK
+    const params = new URLSearchParams(location.search);
+    const error = params.get("error");
+
+    if (error === "registration_required") {
+      toast.error("You're not registered yet. Please create an account.");
+
+      // remove query params so toast doesn't repeat
+      window.history.replaceState({}, document.title, "/register");
+    }
+  }, [location]);
+
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -42,6 +67,7 @@ export default function Register() {
     }
 
     setLoading(true);
+<<<<<<< HEAD
 
     try {
       const ok = await register(
@@ -59,6 +85,23 @@ export default function Register() {
       }
     } catch (err: any) {
       toast.error(err?.message || "Registration error");
+=======
+    const result = await register(form.name, form.email, form.password, form.organization);
+    setLoading(false);
+    if (result.ok) {
+      toast.success("Account created successfully! Redirecting to login...");
+      // Add a small delay to let user see the success message
+      setTimeout(() => {
+        navigate("/login", { state: { email: form.email } });
+      }, 1500);
+    } else {
+      const errMsg = result.error || "Registration failed. Email may already exist.";
+      toast.error(errMsg);
+      // If email already registered, redirect to login with prefilled email
+      if (errMsg.toLowerCase().includes("email already" ) || errMsg.toLowerCase().includes("already registered")) {
+        setTimeout(() => navigate("/login", { state: { email: form.email } }), 800);
+      }
+>>>>>>> 801bc75 (feat: implement OAuth2 and secure password recovery system)
     }
 
     setLoading(false);
