@@ -1,124 +1,168 @@
-from fastapi import FastAPI, Depends, HTTPException
-from pydantic import BaseModel #Structure syntax
-from typing import List
-from database import session,engine
-import db_models
-import models
-from sqlalchemy.orm import Session
+"""
+FastAPI Backend - AWS Cost Monitoring System
+JWT-based Authentication (No Sessions)
+"""
+
+from fastapi import FastAPI, Depends, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
-from security import hash_password,verify_password, create_access_token
+from sqlalchemy.orm import Session
 
-app = FastAPI()
+from database import engine, get_db
+import db_models
+from auth.routes import router as auth_router
+from auth.dependencies import get_current_user
 
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
+
+# Initialize app
+app = FastAPI(
+    title="FinSight API",
+    description="AWS Cloud Cost Monitoring System",
+    version="1.0.0"
+)
+
+# ============================================================================
+# MIDDLEWARE CONFIGURATION
+# ============================================================================
+
+# CORS middleware - must be first
 app.add_middleware(
     CORSMiddleware,
-    allow_origins = ["http://localhost:8080"],
+    allow_origins=[
+        "http://localhost:8080",
+        "http://localhost:5173",
+        "http://localhost:3000",
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-#Creating table in the DB
-db_models.Base.metadata.create_all(bind=engine)   #note that metadata is imp to write
+# ============================================================================
+# DATABASE INITIALIZATION
+# ============================================================================
 
+# Create all tables
+db_models.Base.metadata.create_all(bind=engine)
 
-def get_db():
-    db = session()
-    try:
-        yield db
-    finally:
-        db.close()
+# ============================================================================
+# ROUTE REGISTRATION
+# ============================================================================
 
-#Default
+# Include authentication router (register, login, forgot-password, reset-password, google)
+app.include_router(auth_router, prefix="/auth", tags=["authentication"])
+
+# ============================================================================
+# PUBLIC ROUTES
+# ============================================================================
+
 @app.get("/")
 def read_root():
-    return{"message" : "Welcome to FinSight"}
+    """Health check endpoint."""
+    return {"message": "Welcome to FinSight"}
 
-#Fething all data
+
 @app.get("/clients")
-def get_clients(db:Session = Depends(get_db)):
+def get_clients(db: Session = Depends(get_db)):
+    """Fetch all clients (public for now)."""
     db_clients = db.query(db_models.Client).all()
     return db_clients
 
-# #Fetching Data by id
-# @app.get("/login/{email}&{password}")
-# def get_client(email: str, password: str, db:Session = Depends(get_db)):
-#     db_client = db.query(db_models.Client).filter(db_models.Client.email == email and db_models.Client.password == password).first()
-#     if db_client:
-#         return db_client
-#     return "Client Not Found"
 
-#Adding Data
-@app.post("/register")
-def register(clientData : models.Client, db: Session = Depends(get_db)):
+# ============================================================================
+# PROTECTED ROUTES
+# ============================================================================
 
-    existing = db.query(db_models.Client).filter(db_models.Client.email == clientData.email).first()
-    if existing:
-        raise HTTPException(status_code=400, detail="Email already registered")
-
-    hashed_password = hash_password(clientData.password)
-
-    new_user = db_models.Client(
-        name=clientData.name,
-        email=clientData.email,
-        password=hashed_password,
-        organization=clientData.organization
-    )
-
-    db.add(new_user)
-    db.commit()
-    db.refresh(new_user)
-
-    return {"message": "User created successfully"}
-
-from security import verify_password, create_access_token
-
-@app.post("/login")
-def login(clientData : models.ClientLogin, db: Session = Depends(get_db)):
-
-    db_user = db.query(db_models.Client).filter(db_models.Client.email == clientData.email).first()
-
-    if not db_user:
-        raise HTTPException(status_code=400, detail="Invalid email or password")
-
-    if not verify_password(clientData.password, db_user.password):
-        raise HTTPException(status_code=400, detail="Invalid email or password")
-
-    access_token = create_access_token(
-        data={"sub": str(db_user.id)}
-    )
-
+@app.get("/me")
+def get_current_user_info(current_user: dict = Depends(get_current_user)):
+    """
+    Get current authenticated user's information.
+    Requires: Authorization header with valid JWT token.
+    """
     return {
-        "access_token": access_token,
-        "token_type": "bearer",
-        "user": {
-            "id": db_user.id,
-            "name": db_user.name,
-            "email": db_user.email,
-            "organization": db_user.organization
-        }
+        "id": current_user.get("id"),
+        "email": current_user.get("email"),
+        "name": current_user.get("name"),
+        "organization": current_user.get("organization"),
     }
 
-#Updating Data
-@app.put("/update/{id}")
-def update_client(id : int, updateClient:models.Client, db:Session = Depends(get_db)):
-    db_client = db.query(db_models.Client).filter(db_models.Client.id == id).first()
-    if db_client:
-        db_client.name = updateClient.name
-        db_client.email = updateClient.email
-        db_client.password = updateClient.password
-        db_client.organization = updateClient.organization
-        db.add(db_client)
-        db.commit()
-        return updateClient
-    return "Client Not Found"
 
-#Deleting Data
-@app.delete("/delete/{id}")
-def delete_temp(id: int, db:Session = Depends(get_db)):
-    db_client = db.query(db_models.Client).filter(db_models.Client.id == id).first()
-    if db_client:
-        db.delete(db_client)
-        db.commit()
-        return {"Message": "Client Deleted Successfully"}
-    return{"error": "Client not found"}
+# ============================================================================
+# CRUD OPERATIONS (EXAMPLE - Can be extended)
+# ============================================================================
+
+@app.put("/update/{user_id}")
+def update_user(
+    user_id: int,
+    data: dict,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+):
+    """Update user information (only own account)."""
+    # Ensure user can only update their own account
+    if current_user.get("id") != user_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Cannot update another user's account"
+        )
+
+    db_user = db.query(db_models.Client).filter(db_models.Client.id == user_id).first()
+    if not db_user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found"
+        )
+
+    # Update allowed fields
+    if "name" in data:
+        db_user.name = data["name"]
+    if "organization" in data:
+        db_user.organization = data["organization"]
+
+    db.add(db_user)
+    db.commit()
+    db.refresh(db_user)
+
+    return {
+        "id": db_user.id,
+        "name": db_user.name,
+        "email": db_user.email,
+        "organization": db_user.organization,
+    }
+
+
+@app.delete("/delete/{user_id}")
+def delete_user(
+    user_id: int,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+):
+    """Delete user account (only own account)."""
+    if current_user.get("id") != user_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Cannot delete another user's account"
+        )
+
+    db_user = db.query(db_models.Client).filter(db_models.Client.id == user_id).first()
+    if not db_user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found"
+        )
+
+    db.delete(db_user)
+    db.commit()
+
+    return {"message": "User account deleted successfully"}
+
+
+# ============================================================================
+# ERROR HANDLERS
+# ============================================================================
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run("main:app", host="127.0.0.1", port=8000, reload=True)

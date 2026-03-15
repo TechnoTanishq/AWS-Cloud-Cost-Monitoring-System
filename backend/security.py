@@ -1,28 +1,42 @@
-from passlib.context import CryptContext
-from jose import JWTError, jwt
-from datetime import datetime, timedelta, timezone
+"""
+DEPRECATED: Use auth/utils.py instead.
+This file is kept for backward compatibility only.
+All authentication logic has been moved to auth/utils.py
+"""
 
-SECRET_KEY = "your-super-secret-key-change-this"
-ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 60
+from auth.utils import (
+    hash_password,
+    verify_password,
+    create_access_token,
+    create_password_reset_token,
+    verify_password_reset_token,
+)
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+__all__ = [
+    "hash_password",
+    "verify_password",
+    "create_access_token",
+    "create_password_reset_token",
+    "verify_password_reset_token",
+]
 
+from fastapi.security import OAuth2PasswordBearer
 
-# Hash password
-def hash_password(password: str):
-    return pwd_context.hash(password)
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
 
+def verify_token(token: str):
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        return payload
+    except JWTError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid token",
+        )
 
-# Verify password
-def verify_password(plain_password: str, hashed_password: str):
-    return pwd_context.verify(plain_password, hashed_password)
-
-
-# Create JWT token
-def create_access_token(data: dict):
-    to_encode = data.copy()
-    expire = datetime.now(timezone.utc) + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-    to_encode.update({"exp": expire})
-    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
-    return encoded_jwt
+        # Create a new function get_current_user(token: str = Depends(oauth2_scheme))
+# It should:
+# - Decode JWT token using jwt.decode
+# - Extract email from payload under key "sub"
+# - Raise HTTPException(status_code=401) if token invalid
+# - Return the email string

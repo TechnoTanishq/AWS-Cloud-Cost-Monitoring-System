@@ -1,4 +1,5 @@
-import React, { createContext, useContext, useState, useCallback } from "react";
+import React, { createContext, useContext, useState, useCallback, useEffect } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 
 interface User {
   id: string;
@@ -10,8 +11,8 @@ interface User {
 interface AuthContextType {
   user: User | null;
   isAuthenticated: boolean;
-  login: (email: string, password: string) => Promise<boolean>;
-  register: (name: string, email: string, password: string, organization: string) => Promise<boolean>;
+  login: (email: string, password: string) => Promise<{ok:boolean, error?:string}>;
+  register: (name: string, email: string, password: string, organization: string) => Promise<{ok:boolean, error?:string}>;
   logout: () => void;
   updateProfile: (data: Partial<User>) => void;
 }
@@ -29,11 +30,70 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const stored = localStorage.getItem("finsight_user");
     return stored ? JSON.parse(stored) : null;
   });
+  
+  const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
 
-  const API_URL = "http://localhost:8000"
+  // Handle OAuth callback with verification
+  useEffect(() => {
+    const token = searchParams.get("token");
+    const userEmail = searchParams.get("user");
+    const verified = searchParams.get("verified");
+
+    console.log("[AuthContext] searchParams on effect run", {
+      raw: window.location.search,
+      token,
+      userEmail,
+      verified,
+    });
+
+    if (token && userEmail && verified === "true") {
+      console.log("[OAuth Callback] Received verified token from Google OAuth");
+      console.log(`[OAuth Callback] User email: ${userEmail}`);
+      console.log(`[OAuth Callback] Token verified: ${verified}`);
+      
+      try {
+        // Validate token format (basic check)
+        const parts = token.split('.');
+        if (parts.length !== 3) {
+          throw new Error("Invalid JWT token format");
+        }
+        
+        console.log("[OAuth Callback] ✓ Token format verified (JWT with 3 parts)");
+        
+        localStorage.setItem("token", token);
+        
+        // Create user object from the callback (will be updated when fetching user data)
+        const userData = {
+          id: "google-user",
+          name: userEmail.split("@")[0],
+          email: userEmail,
+          organization: "Google"
+        };
+        
+        console.log("[OAuth Callback] ✓ Storing user data and token");
+        setUser(userData);
+        localStorage.setItem("finsight_user", JSON.stringify(userData));
+        
+        console.log("[OAuth Callback] ✓ Authentication successful! Navigating to dashboard...");
+        // Navigate to dashboard and clean up URL
+        navigate("/dashboard", { replace: true });
+      } catch (error) {
+        console.error("[OAuth Callback] ✗ Error processing OAuth token:", error);
+        localStorage.removeItem("token");
+        navigate("/login?error=invalid_token", { replace: true });
+      }
+    } else if (token && userEmail && !verified) {
+      console.warn("[OAuth Callback] ✗ Token not verified by backend");
+      localStorage.removeItem("token");
+      navigate("/login?error=verification_failed", { replace: true });
+    }
+  }, [searchParams, navigate]);
+
+  // always point to authentication namespace
+  const API_URL = "http://localhost:8000/auth"
 
 const login = useCallback(async (email:string, password:string) => {
-        // setLoading(true);
         try {
             const res = await fetch(`${API_URL}/login`, {
                 method: "POST",
@@ -42,21 +102,28 @@ const login = useCallback(async (email:string, password:string) => {
             });
             if (!res.ok) {
                 const err = await res.json().catch(() => ({}));
-                throw new Error(err.detail || err.message || "Login failed");
+                console.error("Login failed:", err);
+                return { ok: false, error: err.detail || err.message || "Login failed" };
             }
             const payload = await res.json();
             const accessToken = payload.access_token || payload.token || payload.accessToken;
             const userData = payload.user || payload;
-            if (!accessToken) throw new Error("No access token returned");
-            // setToken(accessToken);
-            setUser(userData);
+            if (!accessToken) {
+                console.error("No access token returned");
+                return { ok: false, error: "No access token returned" };
+            }
+            // Ensure id is a string
+            const userWithStringId = {
+                ...userData,
+                id: String(userData.id)
+            };
+            setUser(userWithStringId);
             localStorage.setItem("token", accessToken);
-            localStorage.setItem("user", JSON.stringify(userData));
-            // setLoading(false);
-            return userData;
+            localStorage.setItem("finsight_user", JSON.stringify(userWithStringId));
+            return { ok: true };
         } catch (e) {
-            // setLoading(false);
-            throw e;
+            console.error("Login error:", e);
+            return { ok: false, error: String(e) };
         }
     },[]);
 
@@ -75,20 +142,23 @@ const login = useCallback(async (email:string, password:string) => {
 
       if(!response.ok)
       {
-        return false;
+        const err = await response.json().catch(() => ({}));
+        console.error("Registration failed:", err);
+        return { ok: false, error: err.detail || err.message || "Registration failed" };
       }
-      return true;
+      return { ok: true };
     }
     catch(error)
     {
       console.error("Register error:", error);
-      return false;
+      return { ok: false, error: String(error) };
     }
   }, []);
 
   const logout = useCallback(() => {
     setUser(null);
     localStorage.removeItem("finsight_user");
+    localStorage.removeItem("token");
   }, []);
 
   const updateProfile = useCallback((data: Partial<User>) => {
@@ -106,3 +176,4 @@ const login = useCallback(async (email:string, password:string) => {
     </AuthContext.Provider>
   );
 };
+
