@@ -1,3 +1,7 @@
+"""
+Database Configuration and Session Management
+"""
+
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from dotenv import load_dotenv
