@@ -4,28 +4,22 @@ Database Configuration and Session Management
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
+from dotenv import load_dotenv
+import os
 
-# Database URL
-DB_URL = "sqlite:///./finsight.db"
+load_dotenv()
 
-# Create engine
-engine = create_engine(
-    DB_URL,
-    connect_args={"check_same_thread": False},  # Required for SQLite
-    echo=False
+DB_URL = os.getenv("DATABASE_URL")
+
+if not DB_URL:
+    raise ValueError("DATABASE_URL not found in environment variables")
+
+engine = create_engine(DB_URL)
+
+session = sessionmaker(
+    bind=engine,
+    autoflush=False,
+    autocommit=False
 )
 
-# Create session factory
-SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
-
-print("Database Connected")
-
-
-# Dependency for getting DB session
-def get_db():
-    """Dependency for database session injection."""
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close() 
+print("✅ Database Connected")
