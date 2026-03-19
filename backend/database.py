@@ -22,4 +22,10 @@ session = sessionmaker(
     autocommit=False
 )
 
+def get_db():
+    db = session()
+    try:
+        yield db
+    finally:
+        db.close()
 print("✅ Database Connected")
