@@ -59,7 +59,8 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
       <div className="p-3 border-t border-sidebar-border">
         <div className="px-3 py-2 mb-2">
           <p className="text-xs text-sidebar-foreground/60">Signed in as</p>
-          <p className="text-sm font-medium text-sidebar-accent-foreground truncate">{user?.email}</p>
+        <p className="text-sm font-medium text-sidebar-accent-foreground truncate">{user?.email || localStorage.getItem("email")}
+</p>
         </div>
         <Button
           variant="ghost"

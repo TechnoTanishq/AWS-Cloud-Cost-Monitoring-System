@@ -1,3 +1,5 @@
+import { useEffect } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { dashboardStats, monthlyCosts, serviceCosts, projectCosts } from "@/data/mockData";
 import { DollarSign, TrendingUp, Target, FolderOpen } from "lucide-react";
@@ -16,6 +18,29 @@ const statCards = [
 const COLORS = projectCosts.map((p) => p.color);
 
 export default function Dashboard() {
+
+  const location = useLocation();
+  const navigate = useNavigate();
+
+  // ✅ GOOGLE LOGIN HANDLER (FINAL FIX)
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+
+    const token = params.get("token");
+    const email = params.get("email");
+
+    if (token) {
+      localStorage.setItem("token", token);
+
+      if (email) {
+        localStorage.setItem("email", email);
+      }
+
+      // clean URL after storing
+      navigate("/dashboard");
+    }
+  }, [location]);
+
   return (
     <DashboardLayout>
       <div className="space-y-6">
