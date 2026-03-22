@@ -72,6 +72,9 @@ GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET")
 FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:8080")
 BACKEND_URL = os.getenv("BACKEND_URL", "http://localhost:8000")
 
+print(f"[CONFIG] FRONTEND_URL loaded as: {FRONTEND_URL}")
+print(f"[CONFIG] BACKEND_URL loaded as: {BACKEND_URL}")
+
 EMAIL_USER = os.getenv("EMAIL_USER")
 EMAIL_PASS = os.getenv("EMAIL_PASS")
 
@@ -334,16 +337,15 @@ async def google_callback(code: str, db: Session = Depends(get_db)):
     db_user = db.query(db_models.Client).filter(db_models.Client.email == email).first()
     if not db_user:
         redirect_url = f"{FRONTEND_URL}/register?google=true&error=registration_required"        
-        return RedirectResponse(url=redirect_url, status_code=302)
+        return RedirectResponse(url=redirect_url, status_code=303)
 
     access_token = create_access_token(data={"sub": str(db_user.id), "email": email})
     # Build a properly encoded redirect URL so special characters in the JWT
     # or email do not break the query string parsing in the browser.
     query = urlencode({"token": access_token, "user": email, "verified": "true"})
     redirect_url = f"{FRONTEND_URL}/auth/google/callback?{query}"
-    # Log the redirect URL for debugging (avoid logging the full token in prod)
-    print(f"[auth] Redirecting to frontend callback: {redirect_url[:200]}")
-    return RedirectResponse(url=redirect_url)
+    print(f"[auth] Redirecting to frontend callback: {redirect_url[:80]}...")
+    return RedirectResponse(url=redirect_url, status_code=303)
 
 
     # end of redirect flow

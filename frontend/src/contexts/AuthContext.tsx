@@ -1,5 +1,4 @@
-import React, { createContext, useContext, useState, useCallback, useEffect } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import React, { createContext, useContext, useState, useCallback } from "react";
 
 interface User {
   id: string;
@@ -12,6 +11,7 @@ interface AuthContextType {
   user: User | null;
   isAuthenticated: boolean;
   login: (email: string, password: string) => Promise<{ ok: boolean; error?: string }>;
+  loginWithToken: (token: string, email: string) => void;
   register: (name: string, email: string, password: string, organization: string) => Promise<{ ok: boolean; error?: string }>;
   logout: () => void;
   updateProfile: (data: Partial<User>) => void;
@@ -31,54 +31,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return stored ? JSON.parse(stored) : null;
   });
 
-  const [searchParams] = useSearchParams();
-  const navigate = useNavigate();
-
-  // Handle OAuth callback
-  useEffect(() => {
-    const token = searchParams.get("token");
-    const userEmail = searchParams.get("user");
-    const verified = searchParams.get("verified");
-
-    console.log("[AuthContext] searchParams on effect run", {
-      raw: window.location.search,
-      token,
-      userEmail,
-      verified,
-    });
-
-    if (token && userEmail && verified === "true") {
-      console.log("[OAuth Callback] Received verified token from Google OAuth");
-
-      try {
-        const parts = token.split(".");
-        if (parts.length !== 3) throw new Error("Invalid JWT token format");
-
-        console.log("[OAuth Callback] ✓ Token format verified");
-        localStorage.setItem("token", token);
-
-        const userData: User = {
-          id: "google-user",
-          name: userEmail.split("@")[0],
-          email: userEmail,
-          organization: "Google",
-        };
-
-        setUser(userData);
-        localStorage.setItem("finsight_user", JSON.stringify(userData));
-        console.log("[OAuth Callback] ✓ Authentication successful! Navigating to dashboard...");
-        navigate("/dashboard", { replace: true });
-      } catch (error) {
-        console.error("[OAuth Callback] ✗ Error processing OAuth token:", error);
-        localStorage.removeItem("token");
-        navigate("/login?error=invalid_token", { replace: true });
-      }
-    } else if (token && userEmail && !verified) {
-      console.warn("[OAuth Callback] ✗ Token not verified by backend");
-      localStorage.removeItem("token");
-      navigate("/login?error=verification_failed", { replace: true });
-    }
-  }, [searchParams, navigate]);
+  const loginWithToken = useCallback((token: string, email: string) => {
+    localStorage.setItem("token", token);
+    const userData: User = {
+      id: "google-user",
+      name: email.split("@")[0],
+      email,
+      organization: "Google",
+    };
+    setUser(userData);
+    localStorage.setItem("finsight_user", JSON.stringify(userData));
+  }, []);
 
   const API_URL = "http://localhost:8000/auth";
 
@@ -158,7 +121,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, isAuthenticated: !!user, login, register, logout, updateProfile }}>
+    <AuthContext.Provider value={{ user, isAuthenticated: !!user, login, loginWithToken, register, logout, updateProfile }}>
       {children}
     </AuthContext.Provider>
   );

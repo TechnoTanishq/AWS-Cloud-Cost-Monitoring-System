@@ -4,6 +4,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
+import { AwsProvider } from "@/contexts/AwsContext";
 import Index from "./pages/Index";
 import About from "./pages/About";
 import Feedback from "./pages/Feedback";
@@ -18,15 +19,15 @@ import AccountSettings from "./pages/AccountSettings";
 import NotFound from "./pages/NotFound";
 import ForgotPassword from "./pages/ForgotPassword";
 import ResetPassword from "./pages/ResetPassword";
+import GoogleCallback from "./pages/GoogleCallback";
 
 const queryClient = new QueryClient();
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated } = useAuth();
-  const params = new URLSearchParams(window.location.search);
-  const tokenInUrl = params.get("token");
   const storedToken = localStorage.getItem("token");
-  if (!isAuthenticated && !tokenInUrl && !storedToken) return <Navigate to="/login" replace />;
+  const storedUser = localStorage.getItem("finsight_user");
+  if (!isAuthenticated && !storedToken && !storedUser) return <Navigate to="/login" replace />;
   return <>{children}</>;
 }
 
@@ -37,7 +38,7 @@ function AppRoutes() {
       <Route path="/about" element={<About />} />
       <Route path="/feedback" element={<Feedback />} />
       <Route path="/login" element={<Login />} />
-      <Route path="/auth/google/callback" element={<Login />} />
+      <Route path="/auth/google/callback" element={<GoogleCallback />} />
       <Route path="/register" element={<Register />} />
       <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
       <Route path="/dashboard/costs" element={<ProtectedRoute><CostBreakdown /></ProtectedRoute>} />
@@ -59,7 +60,9 @@ const App = () => (
       <Sonner />
       <BrowserRouter>
         <AuthProvider>
-          <AppRoutes />
+          <AwsProvider>
+            <AppRoutes />
+          </AwsProvider>
         </AuthProvider>
       </BrowserRouter>
     </TooltipProvider>
