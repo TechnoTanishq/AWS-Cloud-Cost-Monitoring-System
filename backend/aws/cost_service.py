@@ -38,3 +38,4 @@ def get_aws_cost():
         total = float(response['ResultsByTime'][0]['Total']['UnblendedCost']['Amount'])
 
     return round(max(0, total), 2)
+   # return 10
