@@ -11,10 +11,15 @@ from auth.google_routes import router as google_router
 from dotenv import load_dotenv
 load_dotenv()
 
+from budget.routes import router as budget_router
+
+
 app = FastAPI(
     title="FinSight API",
     version="1.0.0"
 )
+
+app.include_router(budget_router, prefix="/budget", tags=["budget"])
 
 app.add_middleware(
     CORSMiddleware,
@@ -27,6 +32,10 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+from aws.routes import router as aws_router
+
+app.include_router(aws_router, prefix="/aws", tags=["aws"])
 
 db_models.Base.metadata.create_all(bind=engine)
 
