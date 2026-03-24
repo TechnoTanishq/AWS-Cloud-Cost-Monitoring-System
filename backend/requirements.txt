@@ -18,3 +18,4 @@ google-auth==2.20.0
 itsdangerous==2.1.2
 requests==2.31.0
 psycopg2-binary==2.9.9
+boto3==1.34.69
