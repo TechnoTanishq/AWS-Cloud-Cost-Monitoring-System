@@ -18,22 +18,33 @@ export default function Login() {
   const location = useLocation();
 
   // Handle OAuth callback errors and pre-fill email
-  useEffect(() => {
-    const params = new URLSearchParams(location.search);
-    console.log("[Login] location.search", location.search);
-    const error = params.get("error");
-    const emailFromCallback = params.get("email");
+ useEffect(() => {
+  const params = new URLSearchParams(location.search);
 
-    if (error === "user_not_registered" && emailFromCallback) {
-      toast.error(`Email "${emailFromCallback}" is not registered. Please sign up first.`);
-      setEmail(emailFromCallback);
+  const token = params.get("token");
+  const emailFromGoogle = params.get("email");
+
+  // 👇 THIS PART WAS MISSING / WRONG
+  if (token) {
+    localStorage.setItem("token", token);
+
+    if (emailFromGoogle) {
+      localStorage.setItem("email", emailFromGoogle);
     }
 
-    const state = location.state as { email?: string } | null;
-    if (state?.email && !emailFromCallback) {
-      setEmail(state.email);
-    }
-  }, [location]);
+    toast.success("Google login successful");
+
+    navigate("/dashboard");
+  }
+
+  // existing logic (keep it)
+  const error = params.get("error");
+
+  if (error === "user_not_registered" && emailFromGoogle) {
+    toast.error(`Email "${emailFromGoogle}" is not registered.`);
+    setEmail(emailFromGoogle);
+  }
+}, [location]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

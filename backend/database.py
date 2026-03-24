@@ -3,7 +3,7 @@ Database Configuration and Session Management
 """
 
 from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import sessionmaker, declarative_base
 from dotenv import load_dotenv
 import os
 
@@ -20,8 +20,12 @@ SessionLocal = sessionmaker(
     autocommit=False
 )
 
+# ✅ ADD THIS (VERY IMPORTANT)
+Base = declarative_base()
+
+
 def get_db():
-    db = SessionLocal()
+    db = session()
     try:
         yield db
     finally:

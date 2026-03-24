@@ -1,3 +1,5 @@
+import { useEffect } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { useDashboardStats, useMonthlyCosts, useServiceCosts } from "@/hooks/useAwsData";
 import { useAws } from "@/contexts/AwsContext";
@@ -22,6 +24,28 @@ export default function Dashboard() {
     { label: "Budget Utilization", value: `${stats.budgetUtilization}%`, icon: Target, change: null },
     { label: "Active Projects", value: stats.activeProjects.toString(), icon: FolderOpen, change: null },
   ] : [];
+
+  const location = useLocation();
+  const navigate = useNavigate();
+
+  // ✅ GOOGLE LOGIN HANDLER (FINAL FIX)
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+
+    const token = params.get("token");
+    const email = params.get("email");
+
+    if (token) {
+      localStorage.setItem("token", token);
+
+      if (email) {
+        localStorage.setItem("email", email);
+      }
+
+      // clean URL after storing
+      navigate("/dashboard");
+    }
+  }, [location]);
 
   return (
     <DashboardLayout>

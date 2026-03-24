@@ -1,14 +1,9 @@
-"""
-FastAPI Backend - AWS Cloud Cost Monitoring System
-JWT-based Authentication (No Sessions)
-"""
-
-from fastapi import FastAPI, Depends, HTTPException, status
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from sqlalchemy.orm import Session
 
-from database import engine, get_db
+from database import engine
 import db_models
+
 from auth.routes import router as auth_router
 from auth.dependencies import get_current_user
 from aws.cost_explorer import router as cost_router
@@ -17,27 +12,29 @@ from aws.iam import router as iam_router
 import os
 from dotenv import load_dotenv
 
+from auth.password_routes import router as password_router
+from auth.google_routes import router as google_router
+
+from dotenv import load_dotenv
 load_dotenv()
 
-# ============================================================================
-# APP INITIALIZATION
-# ============================================================================
+from budget.routes import router as budget_router
+
 
 app = FastAPI(
     title="FinSight API",
-    description="AWS Cloud Cost Monitoring System",
     version="1.0.0"
 )
 
 # ============================================================================
 # MIDDLEWARE
 # ============================================================================
+app.include_router(budget_router, prefix="/budget", tags=["budget"])
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "http://localhost:8080",
-        "http://127.0.0.1:8080",
         "http://localhost:5173",
         "http://localhost:5174",
         "http://localhost:3000",
@@ -48,22 +45,21 @@ app.add_middleware(
 )
 
 # ============================================================================
-# DATABASE INITIALIZATION
-# ============================================================================
-
-db_models.Base.metadata.create_all(bind=engine)
-
-# ============================================================================
 # ROUTE REGISTRATION
 # ============================================================================
 
 app.include_router(auth_router, prefix="/auth", tags=["authentication"])
 app.include_router(cost_router, prefix="/costs", tags=["costs"])
 app.include_router(iam_router, prefix="/iam", tags=["iam"])
+from aws.routes import router as aws_router
 
-# ============================================================================
-# PUBLIC ROUTES
-# ============================================================================
+app.include_router(aws_router, prefix="/aws", tags=["aws"])
+
+db_models.Base.metadata.create_all(bind=engine)
+
+app.include_router(auth_router, prefix="/auth", tags=["auth"])
+app.include_router(password_router, prefix="/auth", tags=["password"])
+app.include_router(google_router, prefix="/auth", tags=["google"])
 
 @app.get("/")
 def read_root():
@@ -139,3 +135,5 @@ def delete_user(
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run("main:app", host="127.0.0.1", port=8000, reload=True)
+def root():
+    return {"message": "FinSight Backend Running"}
