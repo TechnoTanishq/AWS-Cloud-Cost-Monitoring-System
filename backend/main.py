@@ -14,6 +14,9 @@ from dotenv import load_dotenv
 
 from auth.password_routes import router as password_router
 from auth.google_routes import router as google_router
+from sqlalchemy.orm import Session
+from fastapi import Depends, HTTPException, status
+from database import get_db
 
 from dotenv import load_dotenv
 load_dotenv()
