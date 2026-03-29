@@ -1,35 +1,48 @@
 """
 AWS Cost Explorer Routes
 Fetches real cost data using boto3.
-Falls back to mock data if AWS credentials are not configured.
+Falls back to mock data if AWS credentials are not configured or data is unavailable.
 """
 
 from fastapi import APIRouter, HTTPException, Query
 from datetime import datetime, timedelta
 import os
 import boto3
+import logging
 from botocore.exceptions import NoCredentialsError, ClientError
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
 EXTERNAL_ID = "finsight-ext-a3b7c9d2e4f6"
 
+
+def is_data_unavailable(e: ClientError) -> bool:
+    return e.response["Error"]["Code"] == "DataUnavailableException"
+
+
 def get_ce_client(role_arn: str = None):
-    """Get Cost Explorer client — uses assumed role if role_arn provided, else static keys."""
     if role_arn:
+        logger.info(f"Attempting sts:AssumeRole for: {role_arn}")
         sts = boto3.client(
             "sts",
             region_name=os.getenv("AWS_REGION", "us-east-1"),
             aws_access_key_id=os.getenv("AWS_ACCESS_KEY_ID"),
             aws_secret_access_key=os.getenv("AWS_SECRET_ACCESS_KEY"),
         )
-        resp = sts.assume_role(
-            RoleArn=role_arn,
-            RoleSessionName="FinSightCESession",
-            ExternalId=EXTERNAL_ID,
-            DurationSeconds=3600,
-        )
+        try:
+            resp = sts.assume_role(
+                RoleArn=role_arn,
+                RoleSessionName="FinSightCESession",
+                ExternalId=EXTERNAL_ID,
+                DurationSeconds=3600,
+            )
+        except ClientError as e:
+            logger.error(f"sts:AssumeRole failed — Code: {e.response['Error']['Code']} | Message: {e.response['Error']['Message']}")
+            raise
         creds = resp["Credentials"]
+        logger.info("sts:AssumeRole succeeded, got temporary credentials")
         return boto3.client(
             "ce",
             region_name="us-east-1",
@@ -44,6 +57,7 @@ def get_ce_client(role_arn: str = None):
         aws_access_key_id=os.getenv("AWS_ACCESS_KEY_ID"),
         aws_secret_access_key=os.getenv("AWS_SECRET_ACCESS_KEY"),
     )
+
 
 def has_aws_credentials():
     return bool(os.getenv("AWS_ACCESS_KEY_ID") and os.getenv("AWS_SECRET_ACCESS_KEY"))
@@ -63,24 +77,26 @@ def get_monthly_costs(role_arn: str = Query(default=None)):
         start = (end - timedelta(days=180)).replace(day=1)
 
         resp = ce.get_cost_and_usage(
-            TimePeriod={
-                "Start": start.strftime("%Y-%m-%d"),
-                "End": end.strftime("%Y-%m-%d"),
-            },
+            TimePeriod={"Start": start.strftime("%Y-%m-%d"), "End": end.strftime("%Y-%m-%d")},
             Granularity="MONTHLY",
             Metrics=["UnblendedCost"],
         )
 
         results = []
         for item in resp["ResultsByTime"]:
-            month_str = item["TimePeriod"]["Start"][:7]  # "2026-01"
+            month_str = item["TimePeriod"]["Start"][:7]
             month_label = datetime.strptime(month_str, "%Y-%m").strftime("%b")
             cost = round(float(item["Total"]["UnblendedCost"]["Amount"]), 2)
             results.append({"month": month_label, "cost": cost, "predicted": None})
-
         return results
 
-    except (NoCredentialsError, ClientError) as e:
+    except ClientError as e:
+        if is_data_unavailable(e):
+            logger.warning("Cost Explorer data not yet available for /monthly — returning mock data")
+            return _mock_monthly()
+        logger.error(f"Cost Explorer /monthly failed: {str(e)}")
+        raise HTTPException(status_code=502, detail=f"AWS error: {str(e)}")
+    except NoCredentialsError as e:
         raise HTTPException(status_code=502, detail=f"AWS error: {str(e)}")
 
 
@@ -112,14 +128,18 @@ def get_service_costs(role_arn: str = Query(default=None)):
             if float(g["Metrics"]["UnblendedCost"]["Amount"]) > 0
         ]
         items.sort(key=lambda x: x["cost"], reverse=True)
-
         total = sum(i["cost"] for i in items) or 1
         for item in items:
             item["percentage"] = round((item["cost"] / total) * 100, 1)
-
         return items
 
-    except (NoCredentialsError, ClientError) as e:
+    except ClientError as e:
+        if is_data_unavailable(e):
+            logger.warning("Cost Explorer data not yet available for /by-service — returning mock data")
+            return _mock_services()
+        logger.error(f"Cost Explorer /by-service failed: {str(e)}")
+        raise HTTPException(status_code=502, detail=f"AWS error: {str(e)}")
+    except NoCredentialsError as e:
         raise HTTPException(status_code=502, detail=f"AWS error: {str(e)}")
 
 
@@ -137,24 +157,23 @@ def get_daily_costs(role_arn: str = Query(default=None)):
         start = end - timedelta(days=30)
 
         resp = ce.get_cost_and_usage(
-            TimePeriod={
-                "Start": start.strftime("%Y-%m-%d"),
-                "End": end.strftime("%Y-%m-%d"),
-            },
+            TimePeriod={"Start": start.strftime("%Y-%m-%d"), "End": end.strftime("%Y-%m-%d")},
             Granularity="DAILY",
             Metrics=["UnblendedCost"],
         )
 
         return [
-            {
-                "day": i + 1,
-                "date": item["TimePeriod"]["Start"],
-                "cost": round(float(item["Total"]["UnblendedCost"]["Amount"]), 2),
-            }
+            {"day": i + 1, "date": item["TimePeriod"]["Start"],
+             "cost": round(float(item["Total"]["UnblendedCost"]["Amount"]), 2)}
             for i, item in enumerate(resp["ResultsByTime"])
         ]
 
-    except (NoCredentialsError, ClientError) as e:
+    except ClientError as e:
+        if is_data_unavailable(e):
+            logger.warning("Cost Explorer data not yet available for /daily — returning mock data")
+            return _mock_daily()
+        raise HTTPException(status_code=502, detail=f"AWS error: {str(e)}")
+    except NoCredentialsError as e:
         raise HTTPException(status_code=502, detail=f"AWS error: {str(e)}")
 
 
@@ -173,7 +192,6 @@ def get_dashboard_stats(role_arn: str = Query(default=None)):
         month_start = today.replace(day=1).strftime("%Y-%m-%d")
         today_str = today.strftime("%Y-%m-%d")
 
-        # Current month cost
         resp = ce.get_cost_and_usage(
             TimePeriod={"Start": month_start, "End": today_str},
             Granularity="MONTHLY",
@@ -181,7 +199,6 @@ def get_dashboard_stats(role_arn: str = Query(default=None)):
         )
         current = round(float(resp["ResultsByTime"][0]["Total"]["UnblendedCost"]["Amount"]), 2)
 
-        # Forecast to month end (may fail if no cost history)
         try:
             next_month = (today.replace(day=1) + timedelta(days=32)).replace(day=1)
             forecast_resp = ce.get_cost_forecast(
@@ -191,16 +208,12 @@ def get_dashboard_stats(role_arn: str = Query(default=None)):
             )
             predicted = round(float(forecast_resp["Total"]["Amount"]), 2)
         except ClientError:
-            predicted = current  # fallback to current if no forecast data
+            predicted = current
 
-        # Last month cost for MoM change
         last_month_end = today.replace(day=1)
         last_month_start = (last_month_end - timedelta(days=1)).replace(day=1)
         prev_resp = ce.get_cost_and_usage(
-            TimePeriod={
-                "Start": last_month_start.strftime("%Y-%m-%d"),
-                "End": last_month_end.strftime("%Y-%m-%d"),
-            },
+            TimePeriod={"Start": last_month_start.strftime("%Y-%m-%d"), "End": last_month_end.strftime("%Y-%m-%d")},
             Granularity="MONTHLY",
             Metrics=["UnblendedCost"],
         )
@@ -210,59 +223,23 @@ def get_dashboard_stats(role_arn: str = Query(default=None)):
         return {
             "currentMonthCost": current,
             "predictedMonthEnd": predicted,
-            "budgetUtilization": 0,   # set via Budgets page
+            "budgetUtilization": 0,
             "activeProjects": 0,
             "monthOverMonthChange": mom_change,
         }
 
-    except (NoCredentialsError, ClientError) as e:
+    except ClientError as e:
+        if is_data_unavailable(e):
+            logger.warning("Cost Explorer data not yet available for /stats — returning mock data")
+            return _mock_stats()
+        logger.error(f"Cost Explorer /stats failed: {str(e)}")
+        raise HTTPException(status_code=502, detail=f"AWS error: {str(e)}")
+    except NoCredentialsError as e:
         raise HTTPException(status_code=502, detail=f"AWS error: {str(e)}")
 
 
 # ============================================================================
-# MOCK FALLBACKS
-# ============================================================================
-
-def _mock_monthly():
-    return [
-        {"month": "Aug", "cost": 4200, "predicted": 4100},
-        {"month": "Sep", "cost": 4800, "predicted": 4600},
-        {"month": "Oct", "cost": 5100, "predicted": 5000},
-        {"month": "Nov", "cost": 4900, "predicted": 5200},
-        {"month": "Dec", "cost": 5600, "predicted": 5400},
-        {"month": "Jan", "cost": 6200, "predicted": 6100},
-    ]
-
-def _mock_services():
-    return [
-        {"service": "EC2", "cost": 2800, "percentage": 38},
-        {"service": "RDS", "cost": 1400, "percentage": 19},
-        {"service": "S3", "cost": 950, "percentage": 13},
-        {"service": "Lambda", "cost": 720, "percentage": 10},
-        {"service": "CloudFront", "cost": 580, "percentage": 8},
-        {"service": "DynamoDB", "cost": 450, "percentage": 6},
-        {"service": "Other", "cost": 300, "percentage": 4},
-    ]
-
-def _mock_daily():
-    import random
-    return [
-        {"day": i + 1, "cost": round(180 + random.random() * 60 + (30 if i > 20 else 0), 2)}
-        for i in range(30)
-    ]
-
-def _mock_stats():
-    return {
-        "currentMonthCost": 6200,
-        "predictedMonthEnd": 6800,
-        "budgetUtilization": 78,
-        "activeProjects": 4,
-        "monthOverMonthChange": 14,
-    }
-
-
-# ============================================================================
-# ML INSIGHTS — forecast + anomalies + top drivers
+# ML INSIGHTS
 # ============================================================================
 
 @router.get("/ml-insights")
@@ -277,7 +254,6 @@ def get_ml_insights(role_arn: str = Query(default=None)):
         today_str = today.strftime("%Y-%m-%d")
         next_month = (today.replace(day=1) + timedelta(days=32)).replace(day=1)
 
-        # Current month by service for top drivers
         svc_resp = ce.get_cost_and_usage(
             TimePeriod={"Start": month_start, "End": today_str},
             Granularity="MONTHLY",
@@ -296,7 +272,6 @@ def get_ml_insights(role_arn: str = Query(default=None)):
             for i in items[:3]
         ]
 
-        # Forecast for ML insights (may fail if no cost history)
         try:
             forecast_resp = ce.get_cost_forecast(
                 TimePeriod={"Start": today_str, "End": next_month.strftime("%Y-%m-%d")},
@@ -304,19 +279,15 @@ def get_ml_insights(role_arn: str = Query(default=None)):
                 Granularity="DAILY",
             )
             forecast = [
-                {
-                    "day": i + 1,
-                    "actual": None,
-                    "predicted": round(float(f["MeanValue"]), 2),
-                    "lower": round(float(f["PredictionIntervalLowerBound"]), 2),
-                    "upper": round(float(f["PredictionIntervalUpperBound"]), 2),
-                }
+                {"day": i + 1, "actual": None,
+                 "predicted": round(float(f["MeanValue"]), 2),
+                 "lower": round(float(f["PredictionIntervalLowerBound"]), 2),
+                 "upper": round(float(f["PredictionIntervalUpperBound"]), 2)}
                 for i, f in enumerate(forecast_resp.get("ForecastResultsByTime", []))
             ]
         except ClientError:
             forecast = []
 
-        # Last month for MoM
         last_end = today.replace(day=1)
         last_start = (last_end - timedelta(days=1)).replace(day=1)
         prev_resp = ce.get_cost_and_usage(
@@ -324,8 +295,7 @@ def get_ml_insights(role_arn: str = Query(default=None)):
             Granularity="MONTHLY", Metrics=["UnblendedCost"],
         )
         prev_cost = float(prev_resp["ResultsByTime"][0]["Total"]["UnblendedCost"]["Amount"]) or 1
-        current_cost = total
-        trend = round(((current_cost - prev_cost) / prev_cost) * 100, 1)
+        trend = round(((total - prev_cost) / prev_cost) * 100, 1)
         predicted_total = sum(f["predicted"] for f in forecast)
 
         explanation = (
@@ -344,13 +314,61 @@ def get_ml_insights(role_arn: str = Query(default=None)):
             "anomalies": [],
         }
 
-    except (NoCredentialsError, ClientError) as e:
+    except ClientError as e:
+        if is_data_unavailable(e):
+            logger.warning("Cost Explorer data not yet available for /ml-insights — returning mock data")
+            return _mock_ml_insights()
+        raise HTTPException(status_code=502, detail=f"AWS error: {str(e)}")
+    except NoCredentialsError as e:
         raise HTTPException(status_code=502, detail=f"AWS error: {str(e)}")
 
+
+# ============================================================================
+# MOCK FALLBACKS
+# ============================================================================
+
+def _mock_monthly():
+    return {"mock": True, "data": [
+        {"month": "Aug", "cost": 4200, "predicted": 4100},
+        {"month": "Sep", "cost": 4800, "predicted": 4600},
+        {"month": "Oct", "cost": 5100, "predicted": 5000},
+        {"month": "Nov", "cost": 4900, "predicted": 5200},
+        {"month": "Dec", "cost": 5600, "predicted": 5400},
+        {"month": "Jan", "cost": 6200, "predicted": 6100},
+    ]}
+
+def _mock_services():
+    return {"mock": True, "data": [
+        {"service": "EC2", "cost": 2800, "percentage": 38},
+        {"service": "RDS", "cost": 1400, "percentage": 19},
+        {"service": "S3", "cost": 950, "percentage": 13},
+        {"service": "Lambda", "cost": 720, "percentage": 10},
+        {"service": "CloudFront", "cost": 580, "percentage": 8},
+        {"service": "DynamoDB", "cost": 450, "percentage": 6},
+        {"service": "Other", "cost": 300, "percentage": 4},
+    ]}
+
+def _mock_daily():
+    import random
+    return {"mock": True, "data": [
+        {"day": i + 1, "cost": round(180 + random.random() * 60 + (30 if i > 20 else 0), 2)}
+        for i in range(30)
+    ]}
+
+def _mock_stats():
+    return {
+        "mock": True,
+        "currentMonthCost": 6200,
+        "predictedMonthEnd": 6800,
+        "budgetUtilization": 78,
+        "activeProjects": 4,
+        "monthOverMonthChange": 14,
+    }
 
 def _mock_ml_insights():
     import random
     return {
+        "mock": True,
         "predictedCost": 6800,
         "trendPercentage": 14,
         "topDrivers": [
