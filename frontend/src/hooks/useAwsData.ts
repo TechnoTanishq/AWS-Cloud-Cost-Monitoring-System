@@ -2,24 +2,50 @@ import { useEffect, useState } from "react";
 
 const API = "http://localhost:8000";
 
-function useFetch(url) {
-  const [data, setData] = useState(null);
+// 🔥 Generic fetch with JWT
+function useFetch(path: string) {
+  const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const [error, setError] = useState<string | null>(null);
+
   useEffect(() => {
-    setLoading(true);
-    fetch(url).then(r => r.json()).then(d => { setData(d); setLoading(false); }).catch(e => { setError(String(e)); setLoading(false); });
-  }, [url]);
+    const fetchData = async () => {
+      setLoading(true);
+
+      const token = localStorage.getItem("token");
+
+      try {
+        const res = await fetch(API + path, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+
+        // 🔴 Handle unauthorized
+        if (res.status === 403) {
+          setError("Unauthorized");
+          setLoading(false);
+          return;
+        }
+
+        const json = await res.json();
+        setData(json);
+      } catch (err) {
+        setError(String(err));
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchData();
+  }, [path]);
+
   return { data, loading, error };
 }
 
-function buildUrl(path, roleArn) {
-  if (roleArn) return API + path + "?role_arn=" + encodeURIComponent(roleArn);
-  return API + path;
-}
-
-export const useDashboardStats = (roleArn) => useFetch(buildUrl("/costs/stats", roleArn));
-export const useMonthlyCosts = (roleArn) => useFetch(buildUrl("/costs/monthly", roleArn));
-export const useServiceCosts = (roleArn) => useFetch(buildUrl("/costs/by-service", roleArn));
-export const useDailyCosts = (roleArn) => useFetch(buildUrl("/costs/daily", roleArn));
-export const useMlInsights = (roleArn) => useFetch(buildUrl("/costs/ml-insights", roleArn));
+// ✅ Hooks (NO roleArn)
+export const useDashboardStats = () => useFetch("/costs/stats");
+export const useMonthlyCosts = () => useFetch("/costs/monthly");
+export const useServiceCosts = () => useFetch("/costs/by-service");
+export const useDailyCosts = () => useFetch("/costs/daily");
+export const useMlInsights = () => useFetch("/costs/ml-insights");

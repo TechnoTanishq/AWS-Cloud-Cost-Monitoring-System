@@ -6,7 +6,7 @@ import os
 import httpx
 
 from database import get_db
-import db_models
+import models.db_models as db_models
 from auth.utils import create_access_token
 
 from google.oauth2 import id_token as google_id_token

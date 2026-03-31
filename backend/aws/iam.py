@@ -3,11 +3,15 @@ AWS IAM / STS Integration
 Validates and assumes a cross-account IAM role using STS.
 """
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 import boto3
 from botocore.exceptions import ClientError, NoCredentialsError
 import os
+from sqlalchemy.orm import Session
+from database import get_db
+from models.aws_account import AWSAccount
+from auth.dependencies import get_current_user
 
 router = APIRouter()
 
@@ -46,13 +50,11 @@ class ConnectRequest(BaseModel):
 
 
 @router.post("/connect")
-def connect_aws_account(payload: ConnectRequest):
-    if not payload.account_id.strip() or not payload.role_arn.strip():
-        raise HTTPException(status_code=400, detail="account_id and role_arn are required")
-
-    if not payload.account_id.strip().isdigit() or len(payload.account_id.strip()) != 12:
-        raise HTTPException(status_code=400, detail="AWS Account ID must be 12 digits")
-
+def connect_aws_account(
+    payload: ConnectRequest,
+    db: Session = Depends(get_db),
+    user=Depends(get_current_user)
+):
     try:
         sts = boto3.client(
             "sts",
@@ -61,34 +63,55 @@ def connect_aws_account(payload: ConnectRequest):
             aws_secret_access_key=os.getenv("AWS_SECRET_ACCESS_KEY"),
         )
 
-        response = sts.assume_role(
-            RoleArn=payload.role_arn.strip(),
+        sts.assume_role(
+            RoleArn=payload.role_arn,
             RoleSessionName="FinSightSession",
             ExternalId=EXTERNAL_ID,
-            DurationSeconds=3600,
         )
 
-        creds = response["Credentials"]
+        # ✅ STORE IN DB
+        existing = db.query(AWSAccount).filter_by(user_id=user["id"]).first()
 
-        # Verify the assumed identity
-        assumed_sts = boto3.client(
-            "sts",
-            aws_access_key_id=creds["AccessKeyId"],
-            aws_secret_access_key=creds["SecretAccessKey"],
-            aws_session_token=creds["SessionToken"],
-        )
-        identity = assumed_sts.get_caller_identity()
+        if existing:
+            existing.account_id = payload.account_id
+            existing.role_arn = payload.role_arn
+        else:
+            new_acc = AWSAccount(
+                user_id=user["id"],
+                account_id=payload.account_id,
+                role_arn=payload.role_arn
+            )
+            db.add(new_acc)
 
-        return {
-            "connected": True,
-            "account_id": identity["Account"],
-            "arn": identity["Arn"],
-            "message": "AWS account connected successfully via IAM role.",
-        }
+        db.commit()
 
-    except ClientError as e:
-        code = e.response["Error"]["Code"]
-        msg = e.response["Error"]["Message"]
-        raise HTTPException(status_code=400, detail=f"AWS error ({code}): {msg}")
-    except NoCredentialsError:
-        raise HTTPException(status_code=500, detail="FinSight AWS credentials not configured.")
+        return {"connected": True}
+
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    
+@router.get("/connection")
+def get_connection(db: Session = Depends(get_db), user=Depends(get_current_user)):
+    aws_account = db.query(AWSAccount).filter_by(user_id=user["id"]).first()
+
+    if not aws_account:
+        return {"connected": False}
+
+    return {
+        "connected": True,
+        "account_id": aws_account.account_id,
+        "role_arn": aws_account.role_arn,
+    }
+
+@router.delete("/disconnect")
+def disconnect_aws(
+    db: Session = Depends(get_db),
+    user=Depends(get_current_user)
+):
+    aws = db.query(AWSAccount).filter_by(user_id=user["id"]).first()
+
+    if aws:
+        db.delete(aws)
+        db.commit()
+
+    return {"message": "Disconnected"}
