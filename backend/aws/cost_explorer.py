@@ -1,6 +1,5 @@
 """
-AWS Cost Explorer Routes (SECURE VERSION)
-Uses IAM Role ARN stored in DB instead of frontend.
+AWS Cost Explorer Routes (OPTIMIZED + REDIS CACHED)
 """
 
 from fastapi import APIRouter, HTTPException, Depends
@@ -10,11 +9,12 @@ import boto3
 import logging
 from botocore.exceptions import NoCredentialsError, ClientError
 from sqlalchemy.orm import Session
+import json
 
-# 👉 YOU MUST IMPORT THESE (we’ll fix if needed)
+from redis_client_cnf import redis_client
 from database import get_db
 from models.aws_account import AWSAccount
-from auth import get_current_user   # adjust if your file name is different
+from auth import get_current_user
 
 logger = logging.getLogger(__name__)
 
@@ -24,25 +24,41 @@ EXTERNAL_ID = "finsight-ext-a3b7c9d2e4f6"
 
 
 # ============================================================================
-# 🔐 Helper: Get CE client using stored role ARN
+# 🔐 STS + CE CLIENT (CACHED)
 # ============================================================================
 
 def get_ce_client(role_arn: str):
-    sts = boto3.client(
-        "sts",
-        region_name=os.getenv("AWS_REGION", "us-east-1"),
-        aws_access_key_id=os.getenv("AWS_ACCESS_KEY_ID"),
-        aws_secret_access_key=os.getenv("AWS_SECRET_ACCESS_KEY"),
-    )
+    cache_key = f"sts:{role_arn}"
 
-    resp = sts.assume_role(
-        RoleArn=role_arn,
-        RoleSessionName="FinSightCESession",
-        ExternalId=EXTERNAL_ID,
-        DurationSeconds=3600,
-    )
+    cached = redis_client.get(cache_key)
 
-    creds = resp["Credentials"]
+    if cached:
+        print("✅ Using cached STS credentials")
+        creds = json.loads(cached)
+    else:
+        print("❗ Calling STS AssumeRole")
+
+        sts = boto3.client(
+            "sts",
+            region_name=os.getenv("AWS_REGION", "us-east-1"),
+            aws_access_key_id=os.getenv("AWS_ACCESS_KEY_ID"),
+            aws_secret_access_key=os.getenv("AWS_SECRET_ACCESS_KEY"),
+        )
+
+        resp = sts.assume_role(
+            RoleArn=role_arn,
+            RoleSessionName="FinSightCESession",
+            ExternalId=EXTERNAL_ID,
+            DurationSeconds=3600,
+        )
+
+        creds = resp["Credentials"]
+
+        redis_client.setex(
+            cache_key,
+            3600,
+            json.dumps(creds, default=str)
+        )
 
     return boto3.client(
         "ce",
@@ -67,18 +83,35 @@ def has_aws_credentials():
 
 
 # ============================================================================
+# 📊 GENERIC CACHE HELPER (IMPORTANT 🔥)
+# ============================================================================
+
+def get_or_set_cache(cache_key, ttl, fetch_function):
+    cached = redis_client.get(cache_key)
+
+    if cached:
+        print(f"✅ Cache HIT: {cache_key}")
+        return json.loads(cached)
+
+    print(f"❗ Cache MISS: {cache_key}")
+
+    data = fetch_function()
+
+    redis_client.setex(cache_key, ttl, json.dumps(data))
+
+    return data
+
+
+# ============================================================================
 # 📊 MONTHLY COSTS
 # ============================================================================
 
 @router.get("/monthly")
-def get_monthly_costs(
-    db: Session = Depends(get_db),
-    user=Depends(get_current_user)
-):
+def get_monthly_costs(db: Session = Depends(get_db), user=Depends(get_current_user)):
     if not has_aws_credentials():
         return _mock_monthly()
 
-    try:
+    def fetch():
         ce = get_user_ce_client(db, user)
 
         end = datetime.today().replace(day=1)
@@ -98,14 +131,7 @@ def get_monthly_costs(
             results.append({"month": month_label, "cost": cost, "predicted": None})
         return results
 
-    except ClientError as e:
-        if is_data_unavailable(e):
-            logger.warning("Cost Explorer data not yet available for /monthly — returning mock data")
-            return _mock_monthly()
-        logger.error(f"Cost Explorer /monthly failed: {str(e)}")
-        raise HTTPException(status_code=502, detail=f"AWS error: {str(e)}")
-    except NoCredentialsError as e:
-        raise HTTPException(status_code=502, detail=f"AWS error: {str(e)}")
+    return get_or_set_cache(f"cost:monthly:{user['id']}", 1800, fetch)
 
 
 # ============================================================================
@@ -113,14 +139,11 @@ def get_monthly_costs(
 # ============================================================================
 
 @router.get("/by-service")
-def get_service_costs(
-    db: Session = Depends(get_db),
-    user=Depends(get_current_user)
-):
+def get_service_costs(db: Session = Depends(get_db), user=Depends(get_current_user)):
     if not has_aws_credentials():
         return _mock_services()
 
-    try:
+    def fetch():
         ce = get_user_ce_client(db, user)
 
         today = datetime.today()
@@ -151,14 +174,7 @@ def get_service_costs(
             item["percentage"] = round((item["cost"] / total) * 100, 1)
         return items
 
-    except ClientError as e:
-        if is_data_unavailable(e):
-            logger.warning("Cost Explorer data not yet available for /by-service — returning mock data")
-            return _mock_services()
-        logger.error(f"Cost Explorer /by-service failed: {str(e)}")
-        raise HTTPException(status_code=502, detail=f"AWS error: {str(e)}")
-    except NoCredentialsError as e:
-        raise HTTPException(status_code=502, detail=f"AWS error: {str(e)}")
+    return get_or_set_cache(f"cost:service:{user['id']}", 1800, fetch)
 
 
 # ============================================================================
@@ -166,14 +182,11 @@ def get_service_costs(
 # ============================================================================
 
 @router.get("/daily")
-def get_daily_costs(
-    db: Session = Depends(get_db),
-    user=Depends(get_current_user)
-):
+def get_daily_costs(db: Session = Depends(get_db), user=Depends(get_current_user)):
     if not has_aws_credentials():
         return _mock_daily()
 
-    try:
+    def fetch():
         ce = get_user_ce_client(db, user)
 
         end = datetime.today()
@@ -191,13 +204,7 @@ def get_daily_costs(
             for i, item in enumerate(resp["ResultsByTime"])
         ]
 
-    except ClientError as e:
-        if is_data_unavailable(e):
-            logger.warning("Cost Explorer data not yet available for /daily — returning mock data")
-            return _mock_daily()
-        raise HTTPException(status_code=502, detail=f"AWS error: {str(e)}")
-    except NoCredentialsError as e:
-        raise HTTPException(status_code=502, detail=f"AWS error: {str(e)}")
+    return get_or_set_cache(f"cost:daily:{user['id']}", 1800, fetch)
 
 
 # ============================================================================
@@ -205,14 +212,11 @@ def get_daily_costs(
 # ============================================================================
 
 @router.get("/stats")
-def get_dashboard_stats(
-    db: Session = Depends(get_db),
-    user=Depends(get_current_user)
-):
+def get_dashboard_stats(db: Session = Depends(get_db), user=Depends(get_current_user)):
     if not has_aws_credentials():
         return _mock_stats()
 
-    try:
+    def fetch():
         ce = get_user_ce_client(db, user)
 
         today = datetime.today()
@@ -227,37 +231,22 @@ def get_dashboard_stats(
 
         current = round(float(resp["ResultsByTime"][0]["Total"]["UnblendedCost"]["Amount"]), 2)
 
-        # Calculate predicted month-end (simple linear projection)
-        today = datetime.today()
         days_in_month = (today.replace(day=28) + timedelta(days=4)).replace(day=1) - timedelta(days=1)
-        days_passed = today.day
-        predicted = current * (days_in_month.day / days_passed)
-
-        # Mock other values for now
-        monthOverMonthChange = 10.0  # Placeholder
-        budgetUtilization = 65  # Placeholder
-        activeProjects = 2  # Placeholder
+        predicted = current * (days_in_month.day / today.day)
 
         return {
             "currentMonthCost": current,
             "predictedMonthEnd": round(predicted, 2),
-            "monthOverMonthChange": monthOverMonthChange,
-            "budgetUtilization": budgetUtilization,
-            "activeProjects": activeProjects,
+            "monthOverMonthChange": 10.0,
+            "budgetUtilization": 65,
+            "activeProjects": 2,
         }
 
-    except ClientError as e:
-        if is_data_unavailable(e):
-            logger.warning("Cost Explorer data not yet available for /stats — returning mock data")
-            return _mock_stats()
-        logger.error(f"Cost Explorer /stats failed: {str(e)}")
-        raise HTTPException(status_code=502, detail=f"AWS error: {str(e)}")
-    except NoCredentialsError as e:
-        raise HTTPException(status_code=502, detail=f"AWS error: {str(e)}")
+    return get_or_set_cache(f"cost:stats:{user['id']}", 1800, fetch)
 
 
 # ============================================================================
-# MOCKS (unchanged)
+# MOCKS
 # ============================================================================
 
 def _mock_monthly():
