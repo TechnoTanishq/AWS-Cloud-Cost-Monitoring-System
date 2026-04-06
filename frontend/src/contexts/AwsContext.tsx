@@ -1,22 +1,24 @@
-import React, { createContext, useContext, useState, useCallback } from "react";
+// contexts/AwsContext.tsx
+import React, { createContext, useContext, useState, useCallback, useEffect } from "react";
 
 interface AwsConnection {
   accountId: string;
-  arn: string;
-  roleArn: string;
+  arn?: string;
 }
 
 interface AwsContextType {
   connection: AwsConnection | null;
   isConnected: boolean;
   connect: (accountId: string, roleArn: string) => Promise<{ ok: boolean; error?: string }>;
-  disconnect: () => void;
+  disconnect: () => Promise<void>;
 }
 
 const AwsContext = createContext<AwsContextType | null>(null);
 
-const STORAGE_KEY = "finsight_aws_connection";
 const API = "http://localhost:8000";
+
+// 👉 Helper to get token
+const getToken = () => localStorage.getItem("token");
 
 export const useAws = () => {
   const ctx = useContext(AwsContext);
@@ -25,33 +27,74 @@ export const useAws = () => {
 };
 
 export const AwsProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [connection, setConnection] = useState<AwsConnection | null>(() => {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    return stored ? JSON.parse(stored) : null;
-  });
+  const [connection, setConnection] = useState<AwsConnection | null>(null);
 
+  // ✅ Load connection from backend on app start
+  useEffect(() => {
+    const fetchConnection = async () => {
+      try {
+        const res = await fetch(`${API}/iam/connection`, {
+          headers: {
+            Authorization: `Bearer ${getToken()}`,
+          },
+        });
+
+        const data = await res.json();
+
+        if (data.connected) {
+          setConnection({
+            accountId: data.account_id,
+          });
+        }
+      } catch (err) {
+        console.error("Failed to fetch AWS connection");
+      }
+    };
+
+    fetchConnection();
+  }, []);
+
+  // ✅ Connect (store in backend)
   const connect = useCallback(async (accountId: string, roleArn: string) => {
     try {
       const res = await fetch(`${API}/iam/connect`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${getToken()}`,
+        },
         body: JSON.stringify({ account_id: accountId, role_arn: roleArn }),
       });
-      const data = await res.json();
-      if (!res.ok) return { ok: false, error: data.detail || "Connection failed." };
 
-      const conn: AwsConnection = { accountId: data.account_id, arn: data.arn, roleArn };
-      setConnection(conn);
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(conn));
+      const data = await res.json();
+
+      if (!res.ok) {
+        return { ok: false, error: data.detail || "Connection failed." };
+      }
+
+      // ✅ Only store minimal info
+      setConnection({
+        accountId: accountId,
+      });
+
       return { ok: true };
     } catch {
       return { ok: false, error: "Could not reach backend." };
     }
   }, []);
 
-  const disconnect = useCallback(() => {
+  // ✅ Disconnect (backend + state)
+  const disconnect = useCallback(async () => {
+    try {
+      await fetch(`${API}/iam/disconnect`, {
+        method: "DELETE",
+        headers: {
+          Authorization: `Bearer ${getToken()}`,
+        },
+      });
+    } catch {}
+
     setConnection(null);
-    localStorage.removeItem(STORAGE_KEY);
   }, []);
 
   return (
@@ -60,3 +103,4 @@ export const AwsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     </AwsContext.Provider>
   );
 };
+

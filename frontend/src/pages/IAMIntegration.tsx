@@ -1,3 +1,4 @@
+// pages/IAMIntegration.tsx
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -42,8 +43,8 @@ export default function IAMIntegration() {
     else toast.error(result.error || "Connection failed.");
   };
 
-  const handleDisconnect = () => {
-    disconnect();
+  const handleDisconnect = async () => {
+    await disconnect();
     setAccountId("");
     setRoleArn("");
     toast.success("AWS account disconnected.");

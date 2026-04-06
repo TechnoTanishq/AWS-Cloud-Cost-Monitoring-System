@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from database import get_db
-import db_models
+import models.db_models as db_models
 
 import secrets
 from datetime import datetime, timedelta, timezone

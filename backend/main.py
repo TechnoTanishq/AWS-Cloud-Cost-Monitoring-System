@@ -141,7 +141,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from database import engine
-import db_models
+import models.db_models as db_models
 
 from auth.routes import router as auth_router
 from auth.dependencies import get_current_user
@@ -202,6 +202,9 @@ from aws.routes import router as aws_router
 app.include_router(aws_router, prefix="/aws", tags=["aws"])
 
 db_models.Base.metadata.create_all(bind=engine)
+
+app.include_router(password_router, prefix="/auth", tags=["password"])
+app.include_router(google_router, prefix="/auth", tags=["google"])
 
 @app.get("/")
 def read_root():

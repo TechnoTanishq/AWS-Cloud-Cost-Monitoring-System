@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from database import get_db
-import db_models
+import models.db_models as db_models
 
 from auth.dependencies import get_current_user
 from budget.schemas import BudgetCreate
@@ -43,7 +43,7 @@ def get_budgets(
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from database import get_db
-import db_models
+import models.db_models as db_models
 
 from auth.dependencies import get_current_user
 from budget.schemas import BudgetCreate

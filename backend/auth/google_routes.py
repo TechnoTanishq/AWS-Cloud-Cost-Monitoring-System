@@ -6,7 +6,7 @@ import os
 import httpx
 
 from database import get_db
-import db_models
+import models.db_models as db_models
 from auth.utils import create_access_token
 
 from google.oauth2 import id_token as google_id_token
@@ -16,7 +16,7 @@ router = APIRouter()
 
 GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID")
 GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET")
-FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:8080")
+FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5173")
 BACKEND_URL = os.getenv("BACKEND_URL", "http://localhost:8000")
 
 

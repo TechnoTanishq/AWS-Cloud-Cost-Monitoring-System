@@ -5,8 +5,8 @@ sqlalchemy==2.0.29
 pydantic==2.6.4
 pydantic[email]==2.6.4
 
-passlib[bcrypt]==1.7.4
-bcrypt==4.1.2
+bcrypt==3.2.2
+passlib==1.7.4
 
 python-multipart==0.0.9
 

@@ -3,7 +3,7 @@ Authentication Dependencies
 - JWT extraction from Authorization header
 - Current user dependency
 """
-
+#auth/dependencies.py
 from fastapi import Depends, HTTPException, status
 from starlette.authentication import AuthCredentials, SimpleUser
 from starlette.requests import Request
@@ -11,7 +11,7 @@ from jose import JWTError
 from sqlalchemy.orm import Session
 
 from database import get_db
-import db_models
+import models.db_models as db_models
 from auth.utils import verify_access_token
 
 
