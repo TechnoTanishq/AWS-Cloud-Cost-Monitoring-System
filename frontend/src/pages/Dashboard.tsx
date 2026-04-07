@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import {
   useDashboardStats,
@@ -11,61 +11,60 @@ import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   BarChart, Bar,
 } from "recharts";
-import { toast } from "sonner";
 
-const COLORS = ["hsl(220,72%,50%)", "hsl(200,80%,50%)", "hsl(160,60%,45%)", "hsl(35,90%,55%)"];
 const API = "http://localhost:8000";
 
 export default function Dashboard() {
   const navigate = useNavigate();
-  const location = useLocation();
 
   const [checking, setChecking] = useState(true);
   const [allowed, setAllowed] = useState(false);
 
-  // ✅ ALWAYS CALL HOOKS (no condition)
-  const { data: stats, loading: statsLoading } = useDashboardStats();
-  const { data: monthly, loading: monthlyLoading } = useMonthlyCosts();
-  const { data: services, loading: servicesLoading } = useServiceCosts();
-
-  // 🔥 Google login handler
+  // 🔥 HANDLE GOOGLE TOKEN (FIRST THING)
   useEffect(() => {
-    const params = new URLSearchParams(location.search);
+    const params = new URLSearchParams(window.location.search);
     const token = params.get("token");
 
     if (token) {
       localStorage.setItem("token", token);
-      navigate("/dashboard", { replace: true });
+      window.location.replace("/dashboard"); // 🔥 HARD RESET
     }
-  }, [location, navigate]);
+  }, []);
 
-  // 🔥 AUTH + IAM CHECK
+  // 🔥 GET TOKEN
+  const token = localStorage.getItem("token");
+
+  // ❗ BLOCK EVERYTHING UNTIL TOKEN EXISTS
+  if (!token) {
+    return <div className="p-6">Waiting for login...</div>;
+  }
+
+  // 🔥 SAFE HOOK CALLS (NOW TOKEN EXISTS)
+  const { data: stats, loading: statsLoading } = useDashboardStats();
+  const { data: monthly, loading: monthlyLoading } = useMonthlyCosts();
+  const { data: services, loading: servicesLoading } = useServiceCosts();
+
+  // 🔥 IAM CHECK
   useEffect(() => {
     const checkAccess = async () => {
-      const token = localStorage.getItem("token");
-
-      if (!token) {
-        navigate("/login");
-        return;
-      }
-
       try {
         const res = await fetch(`${API}/iam/connection`, {
-          headers: { Authorization: `Bearer ${token}` },
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
         });
 
-        const data = await res.json();
-        console.log("IAM check:", data);
+        if (!res.ok) throw new Error("Unauthorized");
 
-        if (!data.connected) {
-          toast.info("Please connect your AWS account.");
+        const data = await res.json();
+
+        if (!data.connected && !data.is_connected) {
           navigate("/dashboard/iam");
           return;
         }
 
         setAllowed(true);
-      } catch (err) {
-        console.error(err);
+      } catch {
         navigate("/login");
       } finally {
         setChecking(false);
@@ -73,15 +72,15 @@ export default function Dashboard() {
     };
 
     checkAccess();
-  }, [navigate]);
+  }, [navigate, token]);
 
-  // 🚫 BLOCK UI SAFELY (after hooks)
+  // 🔒 UI BLOCK
   if (checking) {
     return <div className="p-6">Checking access...</div>;
   }
 
   if (!allowed) {
-    return null; // redirect already triggered
+    return null;
   }
 
   const statCards = stats ? [
@@ -95,7 +94,6 @@ export default function Dashboard() {
     <DashboardLayout>
       <div className="space-y-6">
 
-        {/* Stats */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {statsLoading
             ? Array.from({ length: 4 }).map((_, i) => (
@@ -112,7 +110,6 @@ export default function Dashboard() {
               ))}
         </div>
 
-        {/* Charts */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
 
           <div className="card-elevated p-5">

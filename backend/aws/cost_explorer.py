@@ -6,6 +6,7 @@ from fastapi import APIRouter, HTTPException, Depends
 from datetime import datetime, timedelta
 import os
 import boto3
+import logging
 from botocore.exceptions import NoCredentialsError, ClientError
 from sqlalchemy.orm import Session
 import json
@@ -14,6 +15,8 @@ from redis_client_cnf import redis_client
 from database import get_db
 from models.aws_account import AWSAccount
 from auth import get_current_user
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -115,10 +118,7 @@ def get_monthly_costs(db: Session = Depends(get_db), user=Depends(get_current_us
         start = (end - timedelta(days=180)).replace(day=1)
 
         resp = ce.get_cost_and_usage(
-            TimePeriod={
-                "Start": start.strftime("%Y-%m-%d"),
-                "End": end.strftime("%Y-%m-%d"),
-            },
+            TimePeriod={"Start": start.strftime("%Y-%m-%d"), "End": end.strftime("%Y-%m-%d")},
             Granularity="MONTHLY",
             Metrics=["UnblendedCost"],
         )
@@ -129,7 +129,6 @@ def get_monthly_costs(db: Session = Depends(get_db), user=Depends(get_current_us
             month_label = datetime.strptime(month_str, "%Y-%m").strftime("%b")
             cost = round(float(item["Total"]["UnblendedCost"]["Amount"]), 2)
             results.append({"month": month_label, "cost": cost, "predicted": None})
-
         return results
 
     return get_or_set_cache(f"cost:monthly:{user['id']}", 1800, fetch)
@@ -170,11 +169,9 @@ def get_service_costs(db: Session = Depends(get_db), user=Depends(get_current_us
         ]
 
         items.sort(key=lambda x: x["cost"], reverse=True)
-
         total = sum(i["cost"] for i in items) or 1
         for item in items:
             item["percentage"] = round((item["cost"] / total) * 100, 1)
-
         return items
 
     return get_or_set_cache(f"cost:service:{user['id']}", 1800, fetch)
@@ -196,20 +193,14 @@ def get_daily_costs(db: Session = Depends(get_db), user=Depends(get_current_user
         start = end - timedelta(days=30)
 
         resp = ce.get_cost_and_usage(
-            TimePeriod={
-                "Start": start.strftime("%Y-%m-%d"),
-                "End": end.strftime("%Y-%m-%d"),
-            },
+            TimePeriod={"Start": start.strftime("%Y-%m-%d"), "End": end.strftime("%Y-%m-%d")},
             Granularity="DAILY",
             Metrics=["UnblendedCost"],
         )
 
         return [
-            {
-                "day": i + 1,
-                "date": item["TimePeriod"]["Start"],
-                "cost": round(float(item["Total"]["UnblendedCost"]["Amount"]), 2),
-            }
+            {"day": i + 1, "date": item["TimePeriod"]["Start"],
+             "cost": round(float(item["Total"]["UnblendedCost"]["Amount"]), 2)}
             for i, item in enumerate(resp["ResultsByTime"])
         ]
 

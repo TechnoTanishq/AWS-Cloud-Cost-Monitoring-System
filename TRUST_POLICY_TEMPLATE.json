@@ -1,17 +1,17 @@
 {
-  "Version": "2012-10-17",
-  "Statement": [
-    {
-      "Effect": "Allow",
-      "Principal": {
-        "AWS": "arn:aws:iam::YOUR_FINSIGHT_BACKEND_ACCOUNT_ID:user/finsight-backend-service"
-      },
-      "Action": "sts:AssumeRole",
-      "Condition": {
-        "StringEquals": {
-          "sts:ExternalId": "finsight-ext-a3b7c9d2e4f6"
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Effect": "Allow",
+            "Action": "sts:AssumeRole",
+            "Principal": {
+                "AWS": "575267657838"
+            },
+            "Condition": {
+                "StringEquals": {
+                    "sts:ExternalId": "finsight-ext-a3b7c9d2e4f6"
+                }
+            }
         }
-      }
-    }
-  ]
+    ]
 }
