@@ -44,8 +44,14 @@ function useFetch(path: string) {
   return { data, loading, error };
 }
 
+function buildUrl(path: string, roleArn?: string) {
+  if (roleArn) return API + path + "?role_arn=" + encodeURIComponent(roleArn);
+  return API + path;
+}
+
 export const useDashboardStats = () => useFetch("/costs/stats");
 export const useMonthlyCosts = () => useFetch("/costs/monthly");
 export const useServiceCosts = () => useFetch("/costs/by-service");
 export const useDailyCosts = () => useFetch("/costs/daily");
-export const useMlInsights = () => useFetch("/costs/ml-insights");
+export const useMlInsights = (roleArn?: string) =>
+  useFetch(buildUrl("/costs/ml-insights", roleArn));

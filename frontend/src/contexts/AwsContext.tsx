@@ -3,7 +3,7 @@ import React, { createContext, useContext, useState, useCallback, useEffect } fr
 
 interface AwsConnection {
   accountId: string;
-  arn?: string;
+  roleArn?: string;
 }
 
 interface AwsContextType {
@@ -44,6 +44,7 @@ export const AwsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         if (data.connected) {
           setConnection({
             accountId: data.account_id,
+            roleArn: data.role_arn,
           });
         }
       } catch (err) {
@@ -75,6 +76,7 @@ export const AwsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       // ✅ Only store minimal info
       setConnection({
         accountId: accountId,
+        roleArn: data.role_arn,
       });
 
       return { ok: true };

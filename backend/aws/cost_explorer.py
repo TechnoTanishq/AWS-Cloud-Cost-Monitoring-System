@@ -245,6 +245,48 @@ def get_dashboard_stats(db: Session = Depends(get_db), user=Depends(get_current_
     return get_or_set_cache(f"cost:stats:{user['id']}", 1800, fetch)
 
 
+
+
+# ============================================================================
+#  ML INSIGHTS 
+# ============================================================================
+
+@router.get("/ml-insights")
+def get_ml_insights(db: Session = Depends(get_db), user=Depends(get_current_user)):
+    if not has_aws_credentials():
+        return _mock_ml_insights()
+
+    def fetch():
+        ce = get_user_ce_client(db, user)
+
+        today = datetime.today()
+        month_start = today.replace(day=1).strftime("%Y-%m-%d")
+        today_str = today.strftime("%Y-%m-%d")
+
+        resp = ce.get_cost_and_usage(
+            TimePeriod={"Start": month_start, "End": today_str},
+            Granularity="MONTHLY",
+            Metrics=["UnblendedCost"],
+        )
+
+        current = float(resp["ResultsByTime"][0]["Total"]["UnblendedCost"]["Amount"])
+
+        # simple prediction logic
+        days_in_month = (today.replace(day=28) + timedelta(days=4)).replace(day=1) - timedelta(days=1)
+        predicted = current * (days_in_month.day / today.day)
+
+        anomaly = current > predicted * 1.2  # basic anomaly rule
+
+        return {
+            "totalCost": round(current, 2),
+            "predictedCost": round(predicted, 2),
+            "anomaly": anomaly,
+            "savingsOpportunity": round(predicted - current, 2),
+            "recommendation": "Reduce idle EC2 instances" if anomaly else "Costs are under control"
+        }
+
+    return get_or_set_cache(f"cost:ml:{user['id']}", 1800, fetch)
+
 # ============================================================================
 # MOCKS
 # ============================================================================
@@ -265,4 +307,13 @@ def _mock_stats():
         "monthOverMonthChange": 15.5,
         "budgetUtilization": 75,
         "activeProjects": 3
+    }
+
+def _mock_ml_insights():
+    return {
+        "totalCost": 1000,
+        "predictedCost": 1200,
+        "anomaly": False,
+        "savingsOpportunity": 200,
+        "recommendation": "Optimize unused resources"
     }
