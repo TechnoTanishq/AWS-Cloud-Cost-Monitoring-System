@@ -1,7 +1,8 @@
 """
 AWS Cost Explorer Routes (OPTIMIZED + REDIS CACHED)
 """
-
+from services.alert_service import should_send_alert
+from services.email_service import send_budget_email
 from fastapi import APIRouter, HTTPException, Depends
 from datetime import datetime, timedelta
 import os
@@ -230,6 +231,7 @@ def get_dashboard_stats(db: Session = Depends(get_db), user=Depends(get_current_
         )
 
         current = round(float(resp["ResultsByTime"][0]["Total"]["UnblendedCost"]["Amount"]), 2)
+        
 
         days_in_month = (today.replace(day=28) + timedelta(days=4)).replace(day=1) - timedelta(days=1)
         predicted = current * (days_in_month.day / today.day)

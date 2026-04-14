@@ -7,7 +7,11 @@ import secrets
 from datetime import datetime, timedelta, timezone
 
 from auth.utils import send_email, hash_password
+import os
+from dotenv import load_dotenv
+load_dotenv()
 
+FRONTEND_URL=os.getenv("FRONTEND_URL")
 router = APIRouter()
 
 reset_store = {}
@@ -24,7 +28,7 @@ def forgot_password(data: dict, db: Session = Depends(get_db)):
 
     reset_store[token] = {"email": user.email, "expiry": expiry}
 
-    link = f"http://localhost:8080/reset-password?token={token}"
+    link = f"{FRONTEND_URL}/reset-password?token={token}"
     send_email(user.email, link)
 
     return {"message": "Reset link sent"}

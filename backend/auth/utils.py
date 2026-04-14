@@ -160,3 +160,29 @@ def send_email(to_email: str, reset_link: str):
     with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
         server.login(sender_email, sender_password)
         server.sendmail(sender_email, to_email, msg.as_string())
+
+def send_budget_alert(to_email: str, cost: float, budget: float):
+    sender_email = os.getenv("EMAIL_USER")
+    sender_password = os.getenv("EMAIL_PASS")
+
+    body = f"""
+    Hello,
+
+    Your AWS cost has exceeded your budget.
+
+    Budget: ${budget}
+    Current Cost: ${cost}
+
+    Please take action to control your expenses.
+
+    - FinSight
+    """
+
+    msg = MIMEText(body, "plain")
+    msg["Subject"] = "⚠️ Budget Exceeded Alert"
+    msg["From"] = sender_email
+    msg["To"] = to_email
+
+    with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
+        server.login(sender_email, sender_password)
+        server.sendmail(sender_email, to_email, msg.as_string())
