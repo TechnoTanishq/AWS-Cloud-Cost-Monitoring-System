@@ -96,6 +96,21 @@ export default function Budgets() {
     }
   };
 
+  useEffect(() => {
+  if (!budget || !currentCost) return;
+
+  const month = new Date().toISOString().slice(0, 7);
+
+  fetch(
+    `http://localhost:8000/budget/check?month=${month}&cost=${currentCost}&threshold=${threshold}`,
+    {
+      headers: {
+        Authorization: `Bearer ${localStorage.getItem("token")}`,
+      },
+    }
+  );
+}, [currentCost, budget, threshold]);
+
   return (
     <DashboardLayout>
       <div className="space-y-6 max-w-2xl">
