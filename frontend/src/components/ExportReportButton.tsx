@@ -13,8 +13,7 @@ import { Download, History, FileText, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { generatePDFReport, ReportData } from "@/lib/generateReport";
 import { useAws } from "@/contexts/AwsContext";
-
-const API = "http://localhost:8000";
+import { API } from "@/lib/api";
 
 function getAuthHeaders(): Record<string, string> {
   const token = localStorage.getItem("token");

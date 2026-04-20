@@ -8,8 +8,9 @@ import { toast } from "sonner";
 import { Shield, Copy, Link2, Unlink, AlertCircle } from "lucide-react";
 import { useAws } from "@/contexts/AwsContext";
 
+import { API } from "@/lib/api";
+
 const EXTERNAL_ID = "finsight-ext-a3b7c9d2e4f6";
-const API = "http://localhost:8000";
 
 export default function IAMIntegration() {
   const { connection, isConnected, connect, disconnect } = useAws();

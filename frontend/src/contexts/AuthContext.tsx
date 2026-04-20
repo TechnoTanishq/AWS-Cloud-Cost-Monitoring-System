@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useCallback } from "react";
+import { API } from "@/lib/api";
 
 interface User {
   id: string;
@@ -43,7 +44,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     localStorage.setItem("finsight_user", JSON.stringify(userData));
   }, []);
 
-  const API_URL = "http://localhost:8000/auth";
+  const API_URL = `${API}/auth`;
 
   const login = useCallback(async (email: string, password: string) => {
     try {

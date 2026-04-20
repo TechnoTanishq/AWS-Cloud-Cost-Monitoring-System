@@ -5,6 +5,7 @@ import { Label } from "@/components/ui/label";
 import { useState } from "react";
 import { toast } from "sonner";
 import { motion } from "framer-motion";
+import { API } from "@/lib/api";
 
 export default function ForgotPassword() {
   const [email, setEmail] = useState("");
@@ -21,7 +22,7 @@ export default function ForgotPassword() {
     setLoading(true);
 
     try {
-      const res = await fetch("http://localhost:8000/auth/forgot-password", {
+      const res = await fetch(`${API}/auth/forgot-password`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email }),

@@ -4,8 +4,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useState, useEffect } from "react";
 import { toast } from "sonner";
-import { AlertTriangle, Bell } from "lucide-react";
-import { Progress } from "@/components/ui/progress";
+import { AlertTriangle, Bell, CheckCircle2, DollarSign, Target } from "lucide-react";
+import { API } from "@/lib/api";
 
 export default function Budgets() {
   const [budget, setBudget] = useState(0);
@@ -24,7 +24,6 @@ export default function Budgets() {
 
   const token = localStorage.getItem("token");
 
-  const API = "http://localhost:8000";
   const currentMonth = new Date().toISOString().slice(0, 7);
 
   function authHeaders(): Record<string, string> {

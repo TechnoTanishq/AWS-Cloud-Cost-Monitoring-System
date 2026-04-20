@@ -62,13 +62,7 @@ export default function Login() {
   };
 
   const handleGoogleLogin = () => {
-    try {
-      const backendBase = `${window.location.protocol}//${window.location.hostname}:8000/auth`;
-      window.location.href = `${backendBase}/google/login`;
-    } catch (error) {
-      console.error("Google login error:", error);
-      toast.error("Google login failed");
-    }
+    window.location.href = `${import.meta.env.VITE_API_URL || "http://localhost:8000"}/auth/google/login`;
   };
 
   return (

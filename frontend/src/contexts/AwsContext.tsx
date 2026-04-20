@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useCallback, useEffect } from "react";
+import { API } from "@/lib/api";
 
 interface AwsConnection {
   accountId: string;
@@ -15,7 +16,6 @@ interface AwsContextType {
 }
 
 const AwsContext = createContext<AwsContextType | null>(null);
-const API = "http://localhost:8000";
 
 export const useAws = () => {
   const ctx = useContext(AwsContext);
