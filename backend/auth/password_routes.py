@@ -5,6 +5,7 @@ import models.db_models as db_models
 
 import secrets
 from datetime import datetime, timedelta, timezone
+import os
 
 from auth.utils import send_email, hash_password
 
@@ -24,7 +25,8 @@ def forgot_password(data: dict, db: Session = Depends(get_db)):
 
     reset_store[token] = {"email": user.email, "expiry": expiry}
 
-    link = f"http://localhost:8080/reset-password?token={token}"
+    frontend_url = os.getenv("FRONTEND_URL", "http://localhost:5173")
+    link = f"{frontend_url}/reset-password?token={token}"
     send_email(user.email, link)
 
     return {"message": "Reset link sent"}
