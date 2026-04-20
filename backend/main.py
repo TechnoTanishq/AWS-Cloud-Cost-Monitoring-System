@@ -179,14 +179,14 @@ app = FastAPI(
 # ============================================================================
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=False,
-    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
+    allow_origins=[
+        "https://aws-cost-monitoring-system.up.railway.app", # Your Railway Frontend
+        "http://localhost:5173",                            # Local Dev
+    ],
+    allow_credentials=True, # Change this to True if you use Cookies/Auth headers
+    allow_methods=["*"],    # Simplified to allow everything
     allow_headers=["*"],
-    expose_headers=["*"],
-    max_age=3600,
 )
-
 # ============================================================================
 # ROUTE REGISTRATION
 # ============================================================================
@@ -275,8 +275,14 @@ def delete_user(
     return {"message": "User account deleted successfully"}
 
 
+# if __name__ == "__main__":
+#     import uvicorn
+#     uvicorn.run("main:app", host="127.0.0.1", port=8000, reload=True)
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("main:app", host="127.0.0.1", port=8000, reload=True)
+    import os
+    # Railway provides a PORT environment variable; if not found, it defaults to 8000
+    port = int(os.environ.get("PORT", 8000))
+    uvicorn.run("main:app", host="0.0.0.0", port=port, reload=True)
 def root():
     return {"message": "FinSight Backend Running"}
