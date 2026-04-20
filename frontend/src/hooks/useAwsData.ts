@@ -2,56 +2,44 @@ import { useEffect, useState } from "react";
 
 const API = "http://localhost:8000";
 
-function useFetch(path: string) {
+function useFetch(url: string) {
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isMock, setIsMock] = useState(false);
 
   useEffect(() => {
+    setLoading(true);
+    setData(null);
+    setError(null);
+    setIsMock(false);
+
     const token = localStorage.getItem("token");
+    const headers: Record<string, string> = { "Content-Type": "application/json" };
+    if (token) headers["Authorization"] = `Bearer ${token}`;
 
-    // ❗ DO NOT CALL API WITHOUT TOKEN
-    if (!token) {
-      setLoading(false);
-      return;
-    }
-
-    const fetchData = async () => {
-      try {
-        const res = await fetch(API + path, {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        });
-
-        if (res.status === 403) {
-          setError("Unauthorized");
-          return;
+    fetch(url, { headers })
+      .then(r => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        return r.json();
+      })
+      .then(d => {
+        if (d && d.mock === true) {
+          setIsMock(true);
+          setData(d.data !== undefined ? d.data : d);
+        } else {
+          setData(d);
         }
-
-        const json = await res.json();
-        setData(json);
-      } catch (err) {
-        setError(String(err));
-      } finally {
         setLoading(false);
-      }
-    };
+      })
+      .catch(e => { setError(String(e)); setLoading(false); });
+  }, [url]);
 
-    fetchData();
-  }, [path]);
-
-  return { data, loading, error };
+  return { data, loading, error, isMock };
 }
 
-function buildUrl(path: string, roleArn?: string) {
-  if (roleArn) return API + path + "?role_arn=" + encodeURIComponent(roleArn);
-  return API + path;
-}
-
-export const useDashboardStats = () => useFetch("/costs/stats");
-export const useMonthlyCosts = () => useFetch("/costs/monthly");
-export const useServiceCosts = () => useFetch("/costs/by-service");
-export const useDailyCosts = () => useFetch("/costs/daily");
-export const useMlInsights = (roleArn?: string) =>
-  useFetch(buildUrl("/costs/ml-insights", roleArn));
+export const useDashboardStats = () => useFetch(`${API}/costs/stats`);
+export const useMonthlyCosts = () => useFetch(`${API}/costs/monthly`);
+export const useServiceCosts = () => useFetch(`${API}/costs/by-service`);
+export const useDailyCosts = () => useFetch(`${API}/costs/daily`);
+export const useMlInsights = () => useFetch(`${API}/costs/ml-insights`);

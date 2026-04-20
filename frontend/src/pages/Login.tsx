@@ -20,29 +20,14 @@ export default function Login() {
   // Handle OAuth callback errors and pre-fill email
  useEffect(() => {
   const params = new URLSearchParams(location.search);
-
-  const token = params.get("token");
-  const emailFromGoogle = params.get("email");
-
-  // 👇 THIS PART WAS MISSING / WRONG
-  if (token) {
-    localStorage.setItem("token", token);
-
-    if (emailFromGoogle) {
-      localStorage.setItem("email", emailFromGoogle);
-    }
-
-    toast.success("Google login successful");
-
-    navigate("/dashboard");
-  }
-
-  // existing logic (keep it)
   const error = params.get("error");
+  const emailFromGoogle = params.get("email");
 
   if (error === "user_not_registered" && emailFromGoogle) {
     toast.error(`Email "${emailFromGoogle}" is not registered.`);
     setEmail(emailFromGoogle);
+  } else if (error === "google_failed" || error === "invalid_token") {
+    toast.error("Google sign-in failed. Please try again.");
   }
 }, [location]);
 

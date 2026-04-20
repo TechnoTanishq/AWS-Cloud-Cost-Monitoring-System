@@ -877,10 +877,10 @@ function GridBackground() {
   );
 }
 
-function CubeOrb({ size = 80, x = 0, y = 0, delay = 0 }) {
+function CubeOrb({ size = 80, x = "0", y = "0", delay = 0 }: { size?: number; x?: string | number; y?: string | number; delay?: number }) {
   return (
     <motion.div className="cube-orb"
-      style={{ width: size, height: size, left: x, top: y, "--size": `${size}px` }}
+      style={{ width: size, height: size, left: x, top: y, ["--size" as string]: `${size}px` } as React.CSSProperties}
       animate={{ rotateY: [0, 360], rotateX: [0, 12, 0, -12, 0] }}
       transition={{ duration: 14 + delay, repeat: Infinity, ease: "linear", delay }}>
       {["front","back","left","right","top","bottom"].map(f => <div key={f} className={`cube-face ${f}`} />)}

@@ -94,10 +94,10 @@ async def google_callback(code: str, db: Session = Depends(get_db)):
     # Step 4: Create JWT
     token = create_access_token({"sub": str(user.id), "email": user.email})
 
-    # Step 5: Redirect to frontend
+    # Step 5: Redirect to frontend callback
     query = urlencode({
         "token": token,
-        "email": user.email
+        "email": user.email,
     })
 
-    return RedirectResponse(f"{FRONTEND_URL}/dashboard?{query}")
+    return RedirectResponse(f"{FRONTEND_URL}/auth/google/callback?{query}")

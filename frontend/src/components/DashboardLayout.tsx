@@ -1,7 +1,8 @@
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
+import { useAws } from "@/contexts/AwsContext";
 import {
-  BarChart3, LayoutDashboard, PieChart, Brain, Wallet, Settings, LogOut, Shield, Menu,
+  BarChart3, LayoutDashboard, PieChart, Brain, Wallet, Settings, LogOut, Shield, Menu, BookOpen,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useState } from "react";
@@ -12,16 +13,19 @@ const navItems = [
   { to: "/dashboard/ml", label: "ML Insights", icon: Brain },
   { to: "/dashboard/budgets", label: "Budgets", icon: Wallet },
   { to: "/dashboard/iam", label: "IAM Integration", icon: Shield },
+  { to: "/dashboard/setup-guide", label: "AWS Setup Guide", icon: BookOpen },
   { to: "/dashboard/settings", label: "Account Settings", icon: Settings },
 ];
 
 export function DashboardLayout({ children }: { children: React.ReactNode }) {
   const { user, logout } = useAuth();
+  const { reset: resetAws } = useAws();
   const location = useLocation();
   const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const handleLogout = () => {
+    resetAws();   // clear AWS connection state before logging out
     logout();
     navigate("/");
   };

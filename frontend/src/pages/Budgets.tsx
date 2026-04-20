@@ -9,90 +9,93 @@ import { Progress } from "@/components/ui/progress";
 
 export default function Budgets() {
   const [budget, setBudget] = useState(0);
+  const [budgetInput, setBudgetInput] = useState<number | "">(0);
+  const [savedBudget, setSavedBudget] = useState<number>(0);
   const [threshold, setThreshold] = useState(80);
-  const [currentCost, setCurrentCost] = useState(0); // ✅ no hardcoded value
+  const [currentCost, setCurrentCost] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
 
-  const utilization =
-    budget > 0 ? Math.round((currentCost / budget) * 100) : 0;
+  const utilization = savedBudget > 0
+    ? Math.min(Math.round((currentCost / savedBudget) * 100), 999)
+    : budget > 0 ? Math.min(Math.round((currentCost / budget) * 100), 999) : 0;
 
   const isOverThreshold = utilization >= threshold;
 
   const token = localStorage.getItem("token");
 
+  const API = "http://localhost:8000";
+  const currentMonth = new Date().toISOString().slice(0, 7);
+
+  function authHeaders(): Record<string, string> {
+    return {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    };
+  }
+
   // ================================
-  // FETCH BUDGET FROM BACKEND
+  // FETCH BUDGET + COST
   // ================================
   useEffect(() => {
-    const fetchBudget = async () => {
+    const load = async () => {
+      setLoading(true);
       try {
-        const res = await fetch("http://localhost:8000/budget/", {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        });
+        const [budgetRes, statsRes] = await Promise.all([
+          fetch(`${API}/budget/current`, { headers: authHeaders() }),
+          fetch(`${API}/costs/stats`, { headers: authHeaders() }),
+        ]);
 
-        const data = await res.json();
-
-        if (data.length > 0) {
-          setBudget(data[0].amount);
+        if (budgetRes.ok) {
+          const b = await budgetRes.json();
+          if (b.amount != null) {
+            setSavedBudget(b.amount);
+            setBudgetInput(b.amount);
+          }
         }
-      } catch (err) {
-        console.log(err);
+
+        if (statsRes.ok) {
+          const s = await statsRes.json();
+          if (typeof s.currentMonthCost === "number") {
+            setCurrentCost(s.currentMonthCost);
+          }
+        }
+      } catch (e) {
+        console.error(e);
+      } finally {
+        setLoading(false);
       }
     };
-
-    fetchBudget();
-  }, []);
-
-  // ================================
-  // FETCH AWS COST (REAL DATA)
-  // ================================
-  useEffect(() => {
-    const fetchCost = async () => {
-      try {
-        const res = await fetch("http://localhost:8000/aws/cost");
-
-        const data = await res.json();
-
-        setCurrentCost(data.cost); // ✅ real AWS cost
-      } catch (err) {
-        console.log(err);
-      }
-    };
-
-    fetchCost();
+    load();
   }, []);
 
   // ================================
   // SAVE BUDGET
   // ================================
   const handleSave = async () => {
-    if (budget <= 0) {
+    const amount = Number(budgetInput || budget);
+    if (amount <= 0) {
       toast.error("Budget must be greater than 0.");
       return;
     }
-
+    setSaving(true);
     try {
-      const res = await fetch("http://localhost:8000/budget/add", {
+      const res = await fetch(`${API}/budget/add`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          amount: budget,
-          month: new Date().toISOString().slice(0, 7),
-        }),
+        headers: authHeaders(),
+        body: JSON.stringify({ amount, month: currentMonth }),
       });
-
       if (res.ok) {
-        toast.success("Budget saved successfully");
+        setSavedBudget(amount);
+        setBudget(amount);
+        toast.success(`Budget of $${amount.toLocaleString()} saved for ${currentMonth}`);
       } else {
         toast.error("Failed to save budget");
       }
-    } catch (err) {
-      console.log(err);
+    } catch {
       toast.error("Error saving budget");
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -117,8 +120,17 @@ export default function Budgets() {
             </span>
           </div>
 
-          <Progress value={utilization} className="h-3" />
-
+          {/* Custom progress bar with dynamic color */}
+          <div className="h-3 rounded-full bg-muted overflow-hidden">
+            <div
+              className={`h-full rounded-full transition-all duration-700 ${
+                utilization >= 100 ? "bg-red-500" :
+                utilization >= threshold ? "bg-amber-500" :
+                "bg-emerald-500"
+              }`}
+              style={{ width: `${Math.min(utilization, 100)}%` }}
+            />
+          </div>
           {isOverThreshold && (
             <div className="flex items-center gap-2 mt-3 p-3 rounded-lg bg-destructive/5 border border-destructive/10">
               <AlertTriangle className="h-4 w-4 text-destructive shrink-0" />
@@ -137,8 +149,8 @@ export default function Budgets() {
             <Label>Monthly Budget ($)</Label>
             <Input
               type="number"
-              value={budget}
-              onChange={(e) => setBudget(Number(e.target.value))}
+              value={budgetInput}
+              onChange={(e) => setBudgetInput(e.target.value === "" ? "" : Number(e.target.value))}
               min={1}
             />
           </div>
@@ -154,8 +166,8 @@ export default function Budgets() {
             />
           </div>
 
-          <Button onClick={handleSave} className="gap-2">
-            <Bell className="h-4 w-4" /> Save Settings
+          <Button onClick={handleSave} disabled={saving} className="gap-2">
+            <Bell className="h-4 w-4" /> {saving ? "Saving..." : "Save Settings"}
           </Button>
         </div>
 

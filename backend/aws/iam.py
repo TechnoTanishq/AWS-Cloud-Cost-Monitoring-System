@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 from database import get_db
 from models.aws_account import AWSAccount
 from auth.dependencies import get_current_user
+from redis_client_cnf import redis_client
 
 router = APIRouter()
 
@@ -85,6 +86,10 @@ def connect_aws_account(
 
         db.commit()
 
+        # Invalidate cached cost data so real data loads immediately
+        for key in ["monthly", "service", "daily", "stats", "ml"]:
+            redis_client.delete(f"cost:{key}:{user['id']}")
+
         return {"connected": True}
 
     except Exception as e:
@@ -113,5 +118,8 @@ def disconnect_aws(
     if aws:
         db.delete(aws)
         db.commit()
+        # Invalidate cache on disconnect too
+        for key in ["monthly", "service", "daily", "stats", "ml"]:
+            redis_client.delete(f"cost:{key}:{user['id']}")
 
     return {"message": "Disconnected"}

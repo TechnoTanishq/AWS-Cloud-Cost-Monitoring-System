@@ -164,7 +164,7 @@ export default function IAMIntegration() {
                 <div>
                   <p className="font-semibold text-sm">AWS Account Connected</p>
                   <p className="text-xs text-muted-foreground">Account {connection?.accountId}</p>
-                  <p className="text-xs text-muted-foreground font-mono truncate max-w-xs">{connection?.arn}</p>
+                  <p className="text-xs text-muted-foreground font-mono truncate max-w-xs">{connection?.roleArn}</p>
                 </div>
               </div>
               <Button variant="outline" size="sm" onClick={handleDisconnect} className="gap-2 text-destructive border-destructive/30 hover:bg-destructive/10">

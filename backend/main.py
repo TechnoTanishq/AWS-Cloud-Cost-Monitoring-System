@@ -142,6 +142,8 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from database import engine
 import models.db_models as db_models
+import models.aws_account  # ensures aws_accounts table is registered with Base
+import models.report_history  # ensures report_history table is registered with Base
 
 from auth.routes import router as auth_router
 from auth.dependencies import get_current_user
@@ -164,6 +166,7 @@ import logging
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(name)s — %(message)s")
 
 from budget.routes import router as budget_router
+from reports.routes import router as reports_router
 
 
 app = FastAPI(
@@ -202,14 +205,12 @@ app.include_router(google_router, prefix="/auth", tags=["google"])
 app.include_router(cost_router, prefix="/costs", tags=["costs"])
 app.include_router(iam_router, prefix="/iam", tags=["iam"])
 app.include_router(budget_router, prefix="/budget", tags=["budget"])
+app.include_router(reports_router, prefix="/reports", tags=["reports"])
 from aws.routes import router as aws_router
 
 app.include_router(aws_router, prefix="/aws", tags=["aws"])
 
 db_models.Base.metadata.create_all(bind=engine)
-
-app.include_router(password_router, prefix="/auth", tags=["password"])
-app.include_router(google_router, prefix="/auth", tags=["google"])
 
 @app.get("/")
 def read_root():

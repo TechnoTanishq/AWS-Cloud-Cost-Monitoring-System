@@ -9,18 +9,17 @@ export default function GoogleCallback() {
 
   useEffect(() => {
     const token = searchParams.get("token");
-    const userEmail = searchParams.get("user");
-    const verified = searchParams.get("verified");
+    const email = searchParams.get("email");
 
-    if (!token || !userEmail || verified !== "true") {
-      navigate("/login?error=verification_failed", { replace: true });
+    if (!token || !email) {
+      navigate("/login?error=google_failed", { replace: true });
       return;
     }
 
     try {
       const parts = token.split(".");
       if (parts.length !== 3) throw new Error("Invalid JWT");
-      loginWithToken(token, userEmail);
+      loginWithToken(token, email);
       navigate("/dashboard", { replace: true });
     } catch {
       navigate("/login?error=invalid_token", { replace: true });
@@ -31,7 +30,7 @@ export default function GoogleCallback() {
     <div className="min-h-screen flex items-center justify-center">
       <div className="flex flex-col items-center gap-3">
         <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin" />
-        <p className="text-slate-600 text-sm">Signing you in...</p>
+        <p className="text-slate-600 text-sm">Signing you in with Google...</p>
       </div>
     </div>
   );
